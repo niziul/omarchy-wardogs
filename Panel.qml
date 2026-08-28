@@ -843,8 +843,6 @@ Panel {
         }
       }
 
-      PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
-
       SiteLinks {
         visible: !root.settingsMode && !root.newsMode
         Layout.fillWidth: true
@@ -853,6 +851,8 @@ Panel {
         cornerRadius: root.cornerRadius
         onOpenRequested: function(url) { root.openItem(url) }
       }
+
+      PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
 
       Flickable {
         id: scroller
@@ -1455,8 +1455,6 @@ Panel {
             }
           }
 
-          PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
-
           SiteLinks {
             visible: !root.winNewsMode
             Layout.fillWidth: true
@@ -1465,6 +1463,8 @@ Panel {
             cornerRadius: root.cornerRadius
             onOpenRequested: function(url) { root.openItem(url) }
           }
+
+          PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
 
           RowLayout {
             visible: !root.winNewsMode
