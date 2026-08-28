@@ -27,7 +27,9 @@ Item {
     return out
   }
 
-  implicitWidth: drop.implicitWidth
+  // The kit Dropdown defaults to Style.spacing.dropdownWidth (240px), which
+  // crowds the popup's search row — pin a compact trigger width instead.
+  implicitWidth: Style.space(150)
   implicitHeight: drop.implicitHeight
 
   Dropdown {
