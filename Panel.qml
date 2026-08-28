@@ -874,6 +874,61 @@ Panel {
 
       PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
 
+      // Pinned search row: stays above the scrolling grid so the field and
+      // category picker never scroll away.
+      RowLayout {
+        visible: !root.settingsMode && !root.newsMode
+        Layout.fillWidth: true
+        spacing: Style.space(6)
+
+        TextField {
+          id: searchInput
+          Layout.fillWidth: true
+          placeholderText: "Fuzzy search the armory…  ( / )"
+          foreground: root.fg
+          accent: Color.accent
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          text: root.searchText
+          // Read the field (not the signal arg): this engine binds
+          // handler params by the signal's declared name, so a renamed
+          // arg arrives undefined.
+          onTextEdited: root.searchText = searchInput.text
+          Keys.onEscapePressed: searchInput.focus = false
+          Keys.onUpPressed: { searchInput.focus = false; root.moveCursor("panel", 0, -1) }
+          Keys.onDownPressed: { searchInput.focus = false; root.moveCursor("panel", 0, 1) }
+          Keys.onReturnPressed: root.activateCursor("panel")
+          Keys.onEnterPressed: root.activateCursor("panel")
+        }
+
+        Button {
+          visible: root.searchText !== ""
+          radius: root.cornerRadius
+          text: "\u2715"
+          tooltipText: "Clear search"
+          foreground: root.fg
+          fontFamily: root.fontFamily
+          fontSize: Style.font.caption
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          onClicked: {
+            root.searchText = ""
+            searchInput.forceActiveFocus()
+          }
+        }
+
+        CategorySelect {
+          Layout.alignment: Qt.AlignVCenter
+          rowHeight: Math.round(searchInput.implicitHeight)
+          items: root.items
+          kinds: root.kinds
+          activeKind: root.activeKind
+          fg: root.fg
+          fontFamily: root.fontFamily
+          onSetKind: function(k) { root.activeKind = k }
+        }
+      }
+
       Flickable {
         id: scroller
         Layout.fillWidth: true
@@ -900,59 +955,6 @@ Panel {
               visible: !root.settingsMode && !root.newsMode
               Layout.fillWidth: true
               spacing: Style.space(8)
-
-            // The category picker lives at the right end of the search row.
-            RowLayout {
-              Layout.fillWidth: true
-              spacing: Style.space(6)
-
-              TextField {
-                id: searchInput
-                Layout.fillWidth: true
-                placeholderText: "Fuzzy search the armory…  ( / )"
-                foreground: root.fg
-                accent: Color.accent
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                text: root.searchText
-                // Read the field (not the signal arg): this engine binds
-                // handler params by the signal's declared name, so a renamed
-                // arg arrives undefined.
-                onTextEdited: root.searchText = searchInput.text
-                Keys.onEscapePressed: searchInput.focus = false
-                Keys.onUpPressed: { searchInput.focus = false; root.moveCursor("panel", 0, -1) }
-                Keys.onDownPressed: { searchInput.focus = false; root.moveCursor("panel", 0, 1) }
-                Keys.onReturnPressed: root.activateCursor("panel")
-                Keys.onEnterPressed: root.activateCursor("panel")
-              }
-
-              Button {
-                visible: root.searchText !== ""
-                radius: root.cornerRadius
-                text: "\u2715"
-                tooltipText: "Clear search"
-                foreground: root.fg
-                fontFamily: root.fontFamily
-                fontSize: Style.font.caption
-                horizontalPadding: Style.spacing.controlPaddingX
-                verticalPadding: Style.spacing.controlPaddingY
-                onClicked: {
-                  root.searchText = ""
-                  searchInput.forceActiveFocus()
-                }
-              }
-
-              CategorySelect {
-                Layout.alignment: Qt.AlignVCenter
-                rowHeight: Math.round(searchInput.implicitHeight)
-                items: root.items
-                kinds: root.kinds
-                activeKind: root.activeKind
-                fg: root.fg
-                fontFamily: root.fontFamily
-                onSetKind: function(k) { root.activeKind = k }
-              }
-            }
 
             RowLayout {
               Layout.fillWidth: true
