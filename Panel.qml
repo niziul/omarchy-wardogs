@@ -881,19 +881,7 @@ Panel {
               Layout.fillWidth: true
               spacing: Style.space(8)
 
-            // Categories get a full-width row; the search field gets its own
-            // row below so the pills never get squeezed.
-            CategoryPills {
-              Layout.fillWidth: true
-              items: root.items
-              kinds: root.kinds
-              activeKind: root.activeKind
-              fg: root.fg
-              dim: root.dim
-              fontFamily: root.fontFamily
-              onSetKind: function(k) { root.activeKind = k }
-            }
-
+            // The category picker lives at the right end of the search row.
             RowLayout {
               Layout.fillWidth: true
               spacing: Style.space(6)
@@ -932,6 +920,15 @@ Panel {
                   root.searchText = ""
                   searchInput.forceActiveFocus()
                 }
+              }
+
+              CategorySelect {
+                items: root.items
+                kinds: root.kinds
+                activeKind: root.activeKind
+                fg: root.fg
+                fontFamily: root.fontFamily
+                onSetKind: function(k) { root.activeKind = k }
               }
             }
 
@@ -1077,13 +1074,11 @@ Panel {
                     font.pixelSize: Style.font.caption
                   }
 
-                  CategoryPills {
-                    Layout.fillWidth: true
+                  CategorySelect {
                     items: root.items
                     kinds: root.kinds
                     activeKind: String(root.draftValue("defaultKind", "weapon"))
                     fg: root.fg
-                    dim: root.dim
                     fontFamily: root.fontFamily
                     onSetKind: function(k) { root.setDraftValue("defaultKind", k) }
                   }
@@ -1463,18 +1458,6 @@ Panel {
             onOpenRequested: function(url) { root.openItem(url) }
           }
 
-          CategoryPills {
-            visible: !root.winNewsMode
-            Layout.fillWidth: true
-            items: root.items
-            kinds: root.kinds
-            activeKind: root.activeKind
-            fg: root.fg
-            dim: root.dim
-            fontFamily: root.fontFamily
-            onSetKind: function(k) { root.activeKind = k }
-          }
-
           RowLayout {
             visible: !root.winNewsMode
             Layout.fillWidth: true
@@ -1511,6 +1494,15 @@ Panel {
                 root.searchText = ""
                 winSearchInput.forceActiveFocus()
               }
+            }
+
+            CategorySelect {
+              items: root.items
+              kinds: root.kinds
+              activeKind: root.activeKind
+              fg: root.fg
+              fontFamily: root.fontFamily
+              onSetKind: function(k) { root.activeKind = k }
             }
           }
 
