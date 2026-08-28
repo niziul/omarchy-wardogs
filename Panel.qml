@@ -76,6 +76,7 @@ Panel {
   readonly property string iconDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/icons"
   property var cachedIcons: ({})       // icon file names already on disk
   property int iconEpoch: 0            // bumped when the cache view changes
+  property int cacheEpoch: 0           // bumped only when files are rewritten in place
   property var iconQueue: []           // pending item ids
   property string iconFetchingId: ""   // id currently downloading
   property var failedIcons: ({})       // ids whose icon 404'd; skipped this session
@@ -298,7 +299,10 @@ Panel {
     var epoch = root.iconEpoch
     var name = Model.iconFileName(id)
     if (name === "" || epoch < 0 || !root.cachedIcons[name]) return ""
-    return "file://" + root.iconDir + "/" + name + "?v=" + epoch
+    // The version key only moves on in-place rewrites (startup scan), NOT on
+    // downloads — a per-download bump would change every tile's cache key and
+    // reload the whole grid while the queue drains.
+    return "file://" + root.iconDir + "/" + name + "?v=" + root.cacheEpoch
   }
 
   function requestIcon(id) {
@@ -665,6 +669,7 @@ Panel {
         }
         root.cachedIcons = names
         root.iconEpoch = root.iconEpoch + 1
+        root.cacheEpoch = root.cacheEpoch + 1
       }
     }
   }
@@ -786,25 +791,30 @@ Panel {
             fontFamily: root.fontFamily
             iconComponent: heroIconComponent
           }
-        }
 
-        // The toolbar expands to the right of the hero badge on hover/focus.
-        FocusScope {
-          id: popupToolsScope
-          visible: headerRow.revealTools
-          implicitWidth: popupSiteLinks.implicitWidth
-          implicitHeight: popupSiteLinks.implicitHeight
+          // Overlay: revealed on hover/focus but never participates in the
+          // row layout, so the header geometry never shifts while the
+          // toolbar appears (the reflow used to jump the hero text).
+          FocusScope {
+            id: popupToolsScope
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            z: 10
+            visible: headerRow.revealTools
+            implicitWidth: popupSiteLinks.implicitWidth
+            implicitHeight: popupSiteLinks.implicitHeight
 
-          SiteLinks {
-            id: popupSiteLinks
-            fg: root.fg
-            fontFamily: root.fontFamily
-            cornerRadius: root.cornerRadius
-            onOpenRequested: function(url) {
-              root.openItem(url)
-              // Clicking a button pulls focus out of the key catcher;
-              // hand it back so esc/j/k keep driving the panel.
-              keyCatcher.forceActiveFocus()
+            SiteLinks {
+              id: popupSiteLinks
+              fg: root.fg
+              fontFamily: root.fontFamily
+              cornerRadius: root.cornerRadius
+              onOpenRequested: function(url) {
+                root.openItem(url)
+                // Clicking a button pulls focus out of the key catcher;
+                // hand it back so esc/j/k keep driving the panel.
+                keyCatcher.forceActiveFocus()
+              }
             }
           }
         }
@@ -1437,23 +1447,27 @@ Panel {
                 fontFamily: root.fontFamily
                 iconComponent: heroIconComponent
               }
-            }
 
-            // The toolbar expands to the right of the hero badge on hover/focus.
-            FocusScope {
-              id: winToolsScope
-              visible: winHeaderRow.revealTools
-              implicitWidth: winSiteLinks.implicitWidth
-              implicitHeight: winSiteLinks.implicitHeight
+              // Overlay like the popup header: no layout participation, no
+              // reflow when the toolbar reveals.
+              FocusScope {
+                id: winToolsScope
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                z: 10
+                visible: winHeaderRow.revealTools
+                implicitWidth: winSiteLinks.implicitWidth
+                implicitHeight: winSiteLinks.implicitHeight
 
-              SiteLinks {
-                id: winSiteLinks
-                fg: root.fg
-                fontFamily: root.fontFamily
-                cornerRadius: root.cornerRadius
-                onOpenRequested: function(url) {
-                  root.openItem(url)
-                  winKeys.forceActiveFocus()
+                SiteLinks {
+                  id: winSiteLinks
+                  fg: root.fg
+                  fontFamily: root.fontFamily
+                  cornerRadius: root.cornerRadius
+                  onOpenRequested: function(url) {
+                    root.openItem(url)
+                    winKeys.forceActiveFocus()
+                  }
                 }
               }
             }
