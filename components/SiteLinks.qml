@@ -16,9 +16,11 @@ Item {
   property real cornerRadius: 0
   signal openRequested(string url)
 
-  implicitHeight: Style.space(28)
+  implicitWidth: toolsRow.implicitWidth
+  implicitHeight: toolsRow.implicitHeight
 
   RowLayout {
+    id: toolsRow
     anchors.centerIn: parent
     spacing: Style.space(6)
 

@@ -770,6 +770,7 @@ Panel {
         FocusScope {
           id: popupToolsScope
           visible: headerRow.revealTools
+          implicitWidth: popupSiteLinks.implicitWidth
           implicitHeight: popupSiteLinks.implicitHeight
 
           SiteLinks {
@@ -777,7 +778,12 @@ Panel {
             fg: root.fg
             fontFamily: root.fontFamily
             cornerRadius: root.cornerRadius
-            onOpenRequested: function(url) { root.openItem(url) }
+            onOpenRequested: function(url) {
+              root.openItem(url)
+              // Clicking a button pulls focus out of the key catcher;
+              // hand it back so esc/j/k keep driving the panel.
+              keyCatcher.forceActiveFocus()
+            }
           }
         }
 
@@ -1398,6 +1404,7 @@ Panel {
             FocusScope {
               id: winToolsScope
               visible: winHeaderRow.revealTools
+              implicitWidth: winSiteLinks.implicitWidth
               implicitHeight: winSiteLinks.implicitHeight
 
               SiteLinks {
@@ -1405,7 +1412,10 @@ Panel {
                 fg: root.fg
                 fontFamily: root.fontFamily
                 cornerRadius: root.cornerRadius
-                onOpenRequested: function(url) { root.openItem(url) }
+                onOpenRequested: function(url) {
+                  root.openItem(url)
+                  winKeys.forceActiveFocus()
+                }
               }
             }
 
