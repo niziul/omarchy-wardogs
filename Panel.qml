@@ -849,8 +849,8 @@ Panel {
         visible: !root.settingsMode && !root.newsMode
         Layout.fillWidth: true
         fg: root.fg
-        dim: root.dim
         fontFamily: root.fontFamily
+        cornerRadius: root.cornerRadius
         onOpenRequested: function(url) { root.openItem(url) }
       }
 
@@ -1461,8 +1461,8 @@ Panel {
             visible: !root.winNewsMode
             Layout.fillWidth: true
             fg: root.fg
-            dim: root.dim
             fontFamily: root.fontFamily
+            cornerRadius: root.cornerRadius
             onOpenRequested: function(url) { root.openItem(url) }
           }
 

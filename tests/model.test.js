@@ -188,6 +188,10 @@ test("siteLinks returns the six wardogs.zone tool routes", function() {
   assert.strictEqual(links.length, 6);
   assert.strictEqual(links[0].url, "https://wardogs.zone/loadouts");
   assert.ok(links[5].url.indexOf("community") !== -1);
+  for (var i = 0; i < links.length; i++) {
+    assert.ok(links[i].glyph && links[i].glyph.length > 0, "link " + i + " has a glyph");
+    assert.ok(links[i].label && links[i].label.length > 0, "link " + i + " has a label");
+  }
 });
 
 if (failed) process.exit(1);

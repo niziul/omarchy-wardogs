@@ -280,12 +280,12 @@ function relativeDate(pubDate, nowMs) {
 }
 
 var SITE_LINKS = [
-  { label: "Loadouts", url: "https://wardogs.zone/loadouts" },
-  { label: "Calculators", url: "https://wardogs.zone/calculators/damage" },
-  { label: "Maps", url: "https://wardogs.zone/maps/kavkazi" },
-  { label: "Wiki", url: "https://wardogs.zone/wiki" },
-  { label: "Updates", url: "https://wardogs.zone/updates" },
-  { label: "Community", url: "https://wardogs.zone/community" }
+  { label: "Loadouts", url: "https://wardogs.zone/loadouts", glyph: "\uF0B1" },
+  { label: "Calculators", url: "https://wardogs.zone/calculators/damage", glyph: "\uF1EC" },
+  { label: "Maps", url: "https://wardogs.zone/maps/kavkazi", glyph: "\uF279" },
+  { label: "Wiki", url: "https://wardogs.zone/wiki", glyph: "\uF02D" },
+  { label: "Updates", url: "https://wardogs.zone/updates", glyph: "\uF1DA" },
+  { label: "Community", url: "https://wardogs.zone/community", glyph: "\uF0C0" }
 ]
 
 function siteLinks() {
