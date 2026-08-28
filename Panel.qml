@@ -35,11 +35,17 @@ Panel {
   property var health: ({ ok: false, version: "", build: "", env: "" })
   // Bar pill: glyph + short build version so the live build is visible at a
   // glance; tooltip carries the full picture.
-  readonly property string label: root.health.version !== ""
-    ? "󰊓 " + Model.shortVersion(root.health.version)
-    : "󰊓"
+  readonly property string label: {
+    var cd = Model.releaseCountdown(root.nowMs)
+    if (cd !== "") return "󰊓 " + cd
+    return root.health.version !== ""
+      ? "󰊓 " + Model.shortVersion(root.health.version)
+      : "󰊓"
+  }
   readonly property string barTooltip: {
     var bits = ["Wardogs Zone"]
+    var cd = Model.releaseCountdown(root.nowMs)
+    if (cd !== "") bits.push(cd === "LIVE" ? "early access is live" : "early access in " + cd)
     if (root.health.version !== "") bits.push("build " + root.health.version)
     if (root.items.length > 0) bits.push(root.items.length + " items")
     bits.push(root.onlineText)
@@ -77,6 +83,8 @@ Panel {
   property var cachedIcons: ({})       // icon file names already on disk
   property int iconEpoch: 0            // bumped when the cache view changes
   property int cacheEpoch: 0           // bumped only when files are rewritten in place
+  // Ticking clock so the release countdown in the bar label stays current.
+  property real nowMs: Date.now()
   property var iconQueue: []           // pending item ids
   property string iconFetchingId: ""   // id currently downloading
   property var failedIcons: ({})       // ids whose icon 404'd; skipped this session
@@ -579,6 +587,15 @@ Panel {
     id: newsRetryTimer
     interval: 2500
     onTriggered: if (!newsProc.running) newsProc.running = true
+  }
+
+  // Ticks the release countdown in the bar label.
+  Timer {
+    interval: 30000
+    running: true
+    repeat: true
+    triggeredOnStart: true
+    onTriggered: root.nowMs = Date.now()
   }
 
   Process {

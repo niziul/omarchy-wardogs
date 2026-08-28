@@ -229,6 +229,18 @@ test("filterItems with empty kind searches across all kinds", function() {
   assert.deepStrictEqual(none, []);
 });
 
+test("releaseCountdown formats the early access countdown like the f1 plugin", function() {
+  var rel = Date.parse("2026-09-10T00:00:00Z");
+  assert.strictEqual(M.releaseCountdown(rel - 13*86400000 - 3*3600000), "13d 3h");
+  assert.strictEqual(M.releaseCountdown(rel - 5*3600000 - 3*60000), "5h 03m");
+  assert.strictEqual(M.releaseCountdown(rel - 45*60000), "45m");
+  assert.strictEqual(M.releaseCountdown(rel - 60000), "1m");
+  assert.strictEqual(M.releaseCountdown(rel + 60000), "LIVE");
+  assert.strictEqual(M.releaseCountdown(rel + 12*3600000), "LIVE");
+  assert.strictEqual(M.releaseCountdown(rel + 2*86400000), "");
+  assert.strictEqual(M.releaseCountdown(NaN) !== "", true);
+});
+
 test("bySubcategory filters by type and passes through on empty", function() {
   var base = M.filterItems(subItems, "weapon", "");
   assert.strictEqual(base.length, 4);

@@ -324,6 +324,31 @@ function bySubcategory(items, sub) {
   return out
 }
 
+// Early Access launch: 10 September 2026 (Steam, per wardogs.zone news).
+// Exact hour unannounced — count down to the start of that day, UTC.
+var RELEASE_MS = Date.parse("2026-09-10T00:00:00Z")
+
+function pad2(n) {
+  return (n < 10 ? "0" : "") + n
+}
+
+// F1-style compact countdown: "45m", "5h 03m", "13d 3h", "LIVE" on release
+// day, and "" once the release is more than a day old.
+function releaseCountdown(nowMs) {
+  var now = isFinite(nowMs) ? nowMs : Date.now()
+  var left = RELEASE_MS - now
+  if (left <= -86400000) return ""
+  if (left <= 0) return "LIVE"
+  var minutes = Math.floor(left / 60000)
+  if (minutes < 60) return minutes + "m"
+  var hours = Math.floor(minutes / 60)
+  var rem = minutes % 60
+  if (hours < 48) return hours + "h" + (rem > 0 && hours < 24 ? " " + pad2(rem) + "m" : "")
+  var days = Math.floor(hours / 24)
+  var remH = hours % 24
+  return days + "d" + (remH > 0 ? " " + remH + "h" : "")
+}
+
 var SITE_LINKS = [  { label: "Loadouts", url: "https://wardogs.zone/loadouts", glyph: "\uF0B1" },
   { label: "Calculators", url: "https://wardogs.zone/calculators/damage", glyph: "\uF1EC" },
   { label: "Maps", url: "https://wardogs.zone/maps/kavkazi", glyph: "\uF279" },
@@ -362,6 +387,7 @@ if (typeof module !== "undefined") {
     relativeDate: relativeDate,
     subcategories: subcategories,
     bySubcategory: bySubcategory,
+    releaseCountdown: releaseCountdown,
     siteLinks: siteLinks
   }
 }
