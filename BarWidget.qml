@@ -1,4 +1,5 @@
 import QtQuick
+import Qt5Compat.GraphicalEffects
 import qs.Commons
 import qs.Ui
 
@@ -56,16 +57,32 @@ BarWidget {
   }
 
   // Plugin emblem (assets/icon.png) instead of a font glyph; falls back to
-  // the OpticalGlyph text whenever iconComponent is null.
+  // the OpticalGlyph text whenever iconComponent is null. The emblem ships as
+  // a white alpha-mask, so a Qt6 ColorOverlay re-tints it to the bar's text
+  // color — theme-aware, matching the tinted armory tiles.
+  readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
+
   Component {
     id: dogIconComponent
 
-    Image {
+    Item {
       anchors.fill: parent
-      source: Qt.resolvedUrl("assets/icon.png")
-      fillMode: Image.PreserveAspectFit
-      mipmap: true
-      smooth: true
+
+      Image {
+        id: dogImg
+        anchors.fill: parent
+        source: Qt.resolvedUrl("assets/icon.png")
+        fillMode: Image.PreserveAspectFit
+        mipmap: true
+        smooth: true
+      }
+
+      ColorOverlay {
+        anchors.fill: dogImg
+        visible: dogImg.status === Image.Ready
+        source: dogImg
+        color: root.fg
+      }
     }
   }
 
