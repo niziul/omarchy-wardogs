@@ -54,7 +54,13 @@ BorderSurface {
       Layout.preferredWidth: Style.space(56)
       Layout.preferredHeight: Style.space(56)
 
-      // Artwork fills a square slot; every cached icon is a 96x96 transparent
+      readonly property int slotPx: Style.space(56)
+      // Decode at device pixels (scale 1.25 → 70px): the decoded bitmap then
+      // draws 1:1 with no resample, instead of blurring a 96px decode into
+      // 70 device pixels through non-power-of-two bilinear.
+      readonly property int decodePx: Math.round(slotPx * Screen.devicePixelRatio)
+
+      // Artwork fills a square slot; every cached icon is a transparent
       // square already whitened into an alpha mask at fetch time, so the
       // ColorOverlay re-tints it to the theme foreground. This keeps dark art
       // readable on any theme and re-colors instantly when the theme swaps.
@@ -67,8 +73,8 @@ BorderSurface {
         fillMode: Image.PreserveAspectFit
         mipmap: true
         smooth: true
-        sourceSize.width: 96
-        sourceSize.height: 96
+        sourceSize.width: parent.decodePx
+        sourceSize.height: parent.decodePx
       }
 
       ColorOverlay {
