@@ -998,6 +998,7 @@ Panel {
                 }
               }
             }
+            }
 
             // ---------- news ----------
             ColumnLayout {
@@ -1024,7 +1025,6 @@ Panel {
                 fontFamily: root.fontFamily
                 onOpenRequested: function(url) { root.openItem(url) }
               }
-            }
           }
 
           // ---------- settings ----------
