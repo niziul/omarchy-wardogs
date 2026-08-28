@@ -47,6 +47,7 @@ Panel {
   }
   readonly property bool showInBar: root.setting("alwaysShow", true) === true || root.health.ok
   property bool settingsMode: false
+  property bool newsMode: false
   property bool winOpen: false
   // Keyboard/mouse coexistence: the selection ring only tracks the cursor
   // while keyboard navigation is active; mouse hover suspends it.
@@ -435,7 +436,15 @@ Panel {
 
   function showMain() {
     settingsMode = false
+    newsMode = false
     settingsStatusText = ""
+    focusPanelKeys()
+  }
+
+  function openNews() {
+    newsMode = true
+    settingsMode = false
+    open()
     focusPanelKeys()
   }
 
@@ -704,9 +713,10 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       blocked: searchInput.activeFocus
-      // Esc backs out of settings first; only then closes the panel.
-      onCloseRequested: root.settingsMode ? root.showMain() : root.close()
+      // Esc backs out of settings/news first; only then closes the panel.
+      onCloseRequested: (root.settingsMode || root.newsMode) ? root.showMain() : root.close()
       onMoveRequested: function(dx, dy) {
+        if (root.newsMode) return
         if (root.settingsMode) {
           if (dy !== 0) root.moveSettingsFocus(dy)
           return
@@ -718,6 +728,7 @@ Panel {
         if (root.settingsMode) root.moveSettingsFocus(direction)
       }
       onActivateRequested: function() {
+        if (root.newsMode) return
         if (!root.settingsMode) { root.activateCursor("panel"); return }
         var cur = root.currentSettingsItem()
         if (cur && typeof cur.clicked === "function") cur.clicked()
@@ -726,7 +737,7 @@ Panel {
         if ((t === "r" || t === "R") && !root.settingsMode) root.refresh()
         else if (t === "s" || t === "S") { root.settingsMode ? root.saveSettings() : root.openSettings() }
         else if (t === "h" || t === "H") { if (!root.settingsMode) root.openHub() }
-        else if (t === "/" && !root.settingsMode) {
+        else if (t === "/" && !root.settingsMode && !root.newsMode) {
           searchInput.forceActiveFocus()
           searchInput.cursorPosition = searchInput.text.length
         }
@@ -754,8 +765,8 @@ Panel {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            title: root.settingsMode ? "Wardogs Settings" : "Wardogs Zone"
-            meta: root.settingsMode ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
+            title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : "Wardogs Zone"
+            meta: (root.settingsMode || root.newsMode) ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
             foreground: root.fg
             fontFamily: root.fontFamily
             iconComponent: heroIconComponent
@@ -789,7 +800,20 @@ Panel {
         }
 
         Button {
-          visible: root.settingsMode
+          visible: !root.settingsMode && !root.newsMode
+          radius: root.cornerRadius
+          text: "\uF09E"
+          tooltipText: "News feed"
+          foreground: root.fg
+          fontFamily: root.fontFamily
+          fontSize: Style.font.caption
+          horizontalPadding: Style.spacing.controlPaddingX
+          verticalPadding: Style.spacing.controlPaddingY
+          onClicked: root.openNews()
+        }
+
+        Button {
+          visible: root.settingsMode || root.newsMode
           radius: root.cornerRadius
           text: "Back"
           tooltipText: "Back to armory"
@@ -819,7 +843,7 @@ Panel {
       PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
 
       SiteLinks {
-        visible: !root.settingsMode
+        visible: !root.settingsMode && !root.newsMode
         Layout.fillWidth: true
         fg: root.fg
         dim: root.dim
@@ -850,7 +874,7 @@ Panel {
 
             // ---------- armory ----------
             ColumnLayout {
-              visible: !root.settingsMode
+              visible: !root.settingsMode && !root.newsMode
               Layout.fillWidth: true
               spacing: Style.space(8)
 
@@ -973,15 +997,31 @@ Panel {
               }
             }
 
-            NewsList {
+            // ---------- news ----------
+            ColumnLayout {
+              visible: root.newsMode
               Layout.fillWidth: true
-              items: root.news
-              maxItems: 3
-              compact: true
-              fg: root.fg
-              dim: root.dim
-              fontFamily: root.fontFamily
-              onOpenRequested: function(url) { root.openItem(url) }
+              spacing: Style.space(8)
+
+              Text {
+                Layout.fillWidth: true
+                visible: root.news.length === 0
+                text: root.indexLoading ? "Loading feed…" : "No news yet — offline?"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              NewsList {
+                Layout.fillWidth: true
+                items: root.news
+                maxItems: root.news.length
+                compact: false
+                fg: root.fg
+                dim: root.dim
+                fontFamily: root.fontFamily
+                onOpenRequested: function(url) { root.openItem(url) }
+              }
             }
           }
 
