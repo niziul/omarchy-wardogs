@@ -56,43 +56,20 @@ BarWidget {
     }
   }
 
-  // Plugin emblem (assets/icon.png) instead of a font glyph; falls back to
-  // the OpticalGlyph text whenever iconComponent is null. The emblem ships as
-  // a white alpha-mask, so a Qt6 ColorOverlay re-tints it to the bar's text
-  // color — theme-aware, matching the tinted armory tiles.
+  // Plugin emblem (assets/icon.png) tinted to the bar text color, with the
+  // countdown/label text rendered to its right (F1-sessions layout). The
+  // emblem ships as a white alpha-mask, so a Qt6 ColorOverlay re-tints it.
   readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
 
-  Component {
-    id: dogIconComponent
-
-    Item {
-      anchors.fill: parent
-
-      Image {
-        id: dogImg
-        anchors.fill: parent
-        source: Qt.resolvedUrl("assets/icon.png")
-        fillMode: Image.PreserveAspectFit
-        mipmap: true
-        smooth: true
-      }
-
-      ColorOverlay {
-        anchors.fill: dogImg
-        visible: dogImg.status === Image.Ready
-        source: dogImg
-        color: root.fg
-      }
-    }
-  }
-
-  BarIconButton {
+  WidgetButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    iconComponent: dogIconComponent
-    text: panelLoader.item ? panelLoader.item.label : "󰊓"
-    slotSize: Style.bar.statusSlot
+    // Custom content below paints the emblem + label; a single space keeps
+    // the button's own visibility logic happy.
+    text: " "
+    labelVisible: false
+    keepSpace: true
     tooltipText: panelLoader.item ? panelLoader.item.barTooltip : "Wardogs Zone"
 
     onPressed: function(b) {
@@ -101,5 +78,46 @@ BarWidget {
       else if (b === Qt.MiddleButton) root.toggleWindow()
       else root.togglePanel()
     }
+
+    Row {
+      id: contentRow
+      anchors.centerIn: parent
+      spacing: Style.space(6)
+
+      Item {
+        width: Style.bar.iconCanvas
+        height: Style.bar.iconCanvas
+        anchors.verticalCenter: parent.verticalCenter
+
+        Image {
+          id: dogImg
+          anchors.fill: parent
+          source: Qt.resolvedUrl("assets/icon.png")
+          fillMode: Image.PreserveAspectFit
+          mipmap: true
+          smooth: true
+        }
+
+        ColorOverlay {
+          anchors.fill: dogImg
+          visible: dogImg.status === Image.Ready
+          source: dogImg
+          color: root.fg
+        }
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        visible: !root.vertical && panelLoader.item && panelLoader.item.label !== ""
+        text: panelLoader.item ? panelLoader.item.label : ""
+        textFormat: Text.PlainText
+        color: button.foreground
+        font.family: root.bar ? root.bar.fontFamily : Style.font.family
+        font.pixelSize: Style.font.body
+      }
+    }
+
+    // Size the slot to the custom content instead of the hidden label.
+    fixedWidth: root.vertical ? -1 : Math.max(12, contentRow.implicitWidth + button.scaledHorizontalMargin * 2)
   }
 }

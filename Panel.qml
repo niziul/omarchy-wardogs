@@ -35,12 +35,12 @@ Panel {
   property var health: ({ ok: false, version: "", build: "", env: "" })
   // Bar pill: glyph + short build version so the live build is visible at a
   // glance; tooltip carries the full picture.
+  // Bare label text — the bar widget paints the emblem image separately and
+  // this text to its right (countdown while it lasts, then the build version).
   readonly property string label: {
     var cd = Model.releaseCountdown(root.nowMs)
-    if (cd !== "") return "󰊓 " + cd
-    return root.health.version !== ""
-      ? "󰊓 " + Model.shortVersion(root.health.version)
-      : "󰊓"
+    if (cd !== "") return cd
+    return root.health.version !== "" ? Model.shortVersion(root.health.version) : ""
   }
   readonly property string barTooltip: {
     var bits = ["Wardogs Zone"]
