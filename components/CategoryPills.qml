@@ -50,7 +50,7 @@ Item {
       readonly property bool on: modelData.kind === root.activeKind
       implicitHeight: Style.space(28)
       width: pillRow.implicitWidth + Style.space(16)
-      radius: Style.space(14)
+      radius: 0
       color: Qt.rgba(fg.r, fg.g, fg.b, on ? 0.18 : 0.06)
       border.color: Qt.rgba(fg.r, fg.g, fg.b, on ? 0.45 : 0.1)
       border.width: 1

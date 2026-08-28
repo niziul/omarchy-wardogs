@@ -27,7 +27,7 @@ Item {
       required property var modelData
       implicitHeight: Style.space(26)
       width: lab.implicitWidth + Style.space(16)
-      radius: Style.space(13)
+      radius: 0
       color: Qt.rgba(fg.r, fg.g, fg.b, hover.hovered ? 0.16 : 0.06)
       border.color: Qt.rgba(fg.r, fg.g, fg.b, hover.hovered ? 0.4 : 0.1)
       border.width: 1
