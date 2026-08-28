@@ -87,7 +87,8 @@ Panel {
   readonly property int winGridColumns: 5
 
   // --- derived & theming ---------------------------------------------------
-  readonly property string stateFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/seen.json"  readonly property string indexCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/index.json"
+  readonly property string stateFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/seen.json"
+  readonly property string indexCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/index.json"
   readonly property string newsCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news.json"
   readonly property string newsSeenFilePath: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news-seen.json"
   readonly property string notifyBin: (Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/bin/omarchy-notification-send"
