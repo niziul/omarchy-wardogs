@@ -432,6 +432,7 @@ Panel {
     draftSettings = normalizedSettings(settings)
     settingsStatusText = ""
     settingsMode = true
+    newsMode = false
     open()
     focusPanelKeys()
   }
@@ -789,7 +790,7 @@ Panel {
         }
 
         Button {
-          visible: !root.settingsMode
+          visible: !root.settingsMode && !root.newsMode
           radius: root.cornerRadius
           text: "\uF013"
           tooltipText: "Open settings"
@@ -1192,7 +1193,9 @@ Panel {
       Text {
         visible: !root.settingsMode
         Layout.fillWidth: true
-        text: "←→ ↑↓ · jk hl select · enter open · / search · r refresh · s settings · esc close"
+        text: root.newsMode
+          ? "click an article to open it · r refresh · esc back"
+          : "←→ ↑↓ · jk hl select · enter open · / search · r refresh · s settings · esc close"
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
