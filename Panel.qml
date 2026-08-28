@@ -87,8 +87,7 @@ Panel {
   readonly property int winGridColumns: 5
 
   // --- derived & theming ---------------------------------------------------
-  readonly property string stateFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/seen.json"
-  readonly property string indexCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/index.json"
+  readonly property string stateFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/seen.json"  readonly property string indexCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/index.json"
   readonly property string newsCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news.json"
   readonly property string newsSeenFilePath: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news-seen.json"
   readonly property string notifyBin: (Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/bin/omarchy-notification-send"
@@ -100,6 +99,11 @@ Panel {
   // this setup. The plugin pins its own radius so button corners stay
   // consistent regardless of theme/Hyprland changes — 0 keeps them square.
   readonly property real cornerRadius: 0
+  // Live placeholder: tells the user what the search covers and how big the
+  // catalog is, before they type a character.
+  readonly property string searchPlaceholder: root.items.length > 0
+    ? "Search " + root.items.length + " items across all categories…  ( / )"
+    : "Search the armory…  ( / )"
 
   readonly property int refreshSeconds: {
     var v = Number(root.setting("refreshIntervalSec", 300))
@@ -897,7 +901,7 @@ Panel {
         TextField {
           id: searchInput
           Layout.fillWidth: true
-          placeholderText: "Fuzzy search the armory…  ( / )"
+          placeholderText: root.searchPlaceholder
           foreground: root.fg
           accent: Color.accent
           font.family: root.fontFamily
@@ -1542,7 +1546,7 @@ Panel {
             TextField {
               id: winSearchInput
               Layout.fillWidth: true
-              placeholderText: "Fuzzy search the armory…  ( / )"
+              placeholderText: root.searchPlaceholder
               foreground: root.fg
               accent: Color.accent
               font.family: root.fontFamily
