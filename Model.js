@@ -325,8 +325,10 @@ function bySubcategory(items, sub) {
 }
 
 // Early Access launch: 10 September 2026 (Steam, per wardogs.zone news).
-// Exact hour unannounced — count down to the start of that day, UTC.
-var RELEASE_MS = Date.parse("2026-09-10T00:00:00Z")
+// Timezone-aware: release day is counted against local midnight — the
+// moment 10 September begins on this machine — rather than a fixed UTC
+// instant, since the exact global launch hour is unannounced.
+var RELEASE_MS = new Date(2026, 8, 10).getTime()
 
 function pad2(n) {
   return (n < 10 ? "0" : "") + n
