@@ -58,6 +58,7 @@ Panel {
   property var draftSettings: ({})
   property string settingsStatusText: ""
   property string activeKind: ""
+  property string activeSub: ""
   property string searchText: ""
   property int indexRetries: 0
   property int healthRetries: 0
@@ -104,7 +105,8 @@ Panel {
     if (!isFinite(v)) v = 300
     return Math.round(clamp(v, 60, 86400))
   }
-  readonly property var filtered: Model.filterItems(root.items, root.activeKind, root.searchText)
+  readonly property var filtered: Model.bySubcategory(
+    Model.filterItems(root.items, root.activeKind, root.searchText), root.activeSub)
   readonly property string onlineText: root.health.ok ? "online" : "offline"
   readonly property bool indexLoading: indexProc.running || indexRetryTimer.running
 
@@ -927,7 +929,21 @@ Panel {
           activeKind: root.activeKind
           fg: root.fg
           fontFamily: root.fontFamily
-          onSetKind: function(k) { root.activeKind = k }
+          onSetKind: function(k) {
+            root.activeKind = k
+            root.activeSub = ""
+          }
+        }
+
+        SubcategorySelect {
+          Layout.alignment: Qt.AlignVCenter
+          rowHeight: Math.round(searchInput.implicitHeight)
+          items: root.items
+          activeKind: root.activeKind
+          activeSub: root.activeSub
+          fg: root.fg
+          fontFamily: root.fontFamily
+          onSetSub: function(s) { root.activeSub = s }
         }
       }
 
@@ -1553,7 +1569,21 @@ Panel {
               activeKind: root.activeKind
               fg: root.fg
               fontFamily: root.fontFamily
-              onSetKind: function(k) { root.activeKind = k }
+              onSetKind: function(k) {
+                root.activeKind = k
+                root.activeSub = ""
+              }
+            }
+
+            SubcategorySelect {
+              Layout.alignment: Qt.AlignVCenter
+              rowHeight: Math.round(winSearchInput.implicitHeight)
+              items: root.items
+              activeKind: root.activeKind
+              activeSub: root.activeSub
+              fg: root.fg
+              fontFamily: root.fontFamily
+              onSetSub: function(s) { root.activeSub = s }
             }
           }
 

@@ -194,4 +194,32 @@ test("siteLinks returns the six wardogs.zone tool routes", function() {
   }
 });
 
+var subItems = [
+  { id: "a", name: "A", kind: "weapon", type: "Assault Rifle" },
+  { id: "b", name: "B", kind: "weapon", type: "Sniper Rifle" },
+  { id: "c", name: "C", kind: "weapon", type: "Assault Rifle" },
+  { id: "d", name: "D", kind: "weapon", type: "" },
+  { id: "e", name: "E", kind: "ammo", type: "Assault Rifle" }
+];
+
+test("subcategories lists unique sorted types for a kind with counts", function() {
+  var subs = M.subcategories(subItems, "weapon");
+  assert.strictEqual(subs.length, 2);
+  assert.deepStrictEqual(subs[0], { value: "Assault Rifle", count: 2 });
+  assert.deepStrictEqual(subs[1], { value: "Sniper Rifle", count: 1 });
+  var all = M.subcategories(subItems, "");
+  assert.strictEqual(all.length, 2);
+  assert.strictEqual(all[0].count, 3);
+  assert.deepStrictEqual(M.subcategories([], "weapon"), []);
+});
+
+test("bySubcategory filters by type and passes through on empty", function() {
+  var base = M.filterItems(subItems, "weapon", "");
+  assert.strictEqual(base.length, 4);
+  var rifles = M.bySubcategory(base, "Assault Rifle");
+  assert.strictEqual(rifles.length, 2);
+  assert.deepStrictEqual(M.bySubcategory(base, ""), base);
+  assert.deepStrictEqual(M.bySubcategory(base, "Shotgun"), []);
+});
+
 if (failed) process.exit(1);

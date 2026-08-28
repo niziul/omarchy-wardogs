@@ -279,8 +279,38 @@ function relativeDate(pubDate, nowMs) {
   return formatAge(sec)
 }
 
-var SITE_LINKS = [
-  { label: "Loadouts", url: "https://wardogs.zone/loadouts", glyph: "\uF0B1" },
+// Unique subcategories (item `type`) within a kind, sorted, with counts.
+// Empty kind means all kinds. Items without a type are skipped.
+function subcategories(items, kind) {
+  var counts = {}
+  var order = []
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i]
+    if (!it) continue
+    if (kind && it.kind !== kind) continue
+    var t = String(it.type || "")
+    if (t === "") continue
+    if (counts[t] === undefined) { counts[t] = 0; order.push(t) }
+    counts[t]++
+  }
+  order.sort()
+  var out = []
+  for (var j = 0; j < order.length; j++) out.push({ value: order[j], count: counts[order[j]] })
+  return out
+}
+
+// Keep only items whose type matches `sub`; empty sub passes everything.
+function bySubcategory(items, sub) {
+  if (!sub) return items
+  var out = []
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i]
+    if (it && it.type === sub) out.push(it)
+  }
+  return out
+}
+
+var SITE_LINKS = [  { label: "Loadouts", url: "https://wardogs.zone/loadouts", glyph: "\uF0B1" },
   { label: "Calculators", url: "https://wardogs.zone/calculators/damage", glyph: "\uF1EC" },
   { label: "Maps", url: "https://wardogs.zone/maps/kavkazi", glyph: "\uF279" },
   { label: "Wiki", url: "https://wardogs.zone/wiki", glyph: "\uF02D" },
@@ -316,6 +346,8 @@ if (typeof module !== "undefined") {
     parseNewsCache: parseNewsCache,
     newestGuid: newestGuid,
     relativeDate: relativeDate,
+    subcategories: subcategories,
+    bySubcategory: bySubcategory,
     siteLinks: siteLinks
   }
 }
