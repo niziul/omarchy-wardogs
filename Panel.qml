@@ -48,6 +48,7 @@ Panel {
   readonly property bool showInBar: root.setting("alwaysShow", true) === true || root.health.ok
   property bool settingsMode: false
   property bool newsMode: false
+  property bool winNewsMode: false
   property bool winOpen: false
   // Keyboard/mouse coexistence: the selection ring only tracks the cursor
   // while keyboard navigation is active; mouse hover suspends it.
@@ -280,6 +281,7 @@ Panel {
   function toggleWindow() {
     root.winOpen = !root.winOpen
     if (root.winOpen) {
+      root.winNewsMode = false
       root.refresh()
       root.requestVisibleIcons()
     }
@@ -1315,17 +1317,21 @@ Panel {
       anchors.fill: parent
       focus: true
 
-      Keys.onEscapePressed: root.winOpen = false
-      Keys.onLeftPressed: root.moveCursor("win", -1, 0)
-      Keys.onRightPressed: root.moveCursor("win", 1, 0)
-      Keys.onUpPressed: root.moveCursor("win", 0, -1)
-      Keys.onDownPressed: root.moveCursor("win", 0, 1)
-      Keys.onReturnPressed: root.activateCursor("win")
-      Keys.onEnterPressed: root.activateCursor("win")
-      Keys.onSpacePressed: root.activateCursor("win")
+      Keys.onEscapePressed: {
+        if (root.winNewsMode) root.winNewsMode = false
+        else root.winOpen = false
+      }
+      Keys.onLeftPressed: if (!root.winNewsMode) root.moveCursor("win", -1, 0)
+      Keys.onRightPressed: if (!root.winNewsMode) root.moveCursor("win", 1, 0)
+      Keys.onUpPressed: if (!root.winNewsMode) root.moveCursor("win", 0, -1)
+      Keys.onDownPressed: if (!root.winNewsMode) root.moveCursor("win", 0, 1)
+      Keys.onReturnPressed: if (!root.winNewsMode) root.activateCursor("win")
+      Keys.onEnterPressed: if (!root.winNewsMode) root.activateCursor("win")
+      Keys.onSpacePressed: if (!root.winNewsMode) root.activateCursor("win")
       Keys.onPressed: function(event) {
         if (event.modifiers & Qt.ControlModifier || event.modifiers & Qt.AltModifier) return
         if (event.key === Qt.Key_R) root.refresh()
+        else if (root.winNewsMode) return
         else if (event.key === Qt.Key_J || event.text === "j") root.moveCursor("win", 0, 1)
         else if (event.key === Qt.Key_K || event.text === "k") root.moveCursor("win", 0, -1)
         else if (event.text === "h" || event.text === "H") root.moveCursor("win", -1, 0)
@@ -1372,8 +1378,8 @@ Panel {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                title: "Wardogs Zone"
-                meta: root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…"
+                title: root.winNewsMode ? "Wardogs News" : "Wardogs Zone"
+                meta: root.winNewsMode ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
                 foreground: root.fg
                 fontFamily: root.fontFamily
                 iconComponent: heroIconComponent
@@ -1405,6 +1411,32 @@ Panel {
             }
 
             Button {
+              visible: !root.winNewsMode
+              radius: root.cornerRadius
+              text: "\uF09E"
+              tooltipText: "News feed"
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              horizontalPadding: Style.spacing.controlPaddingX
+              verticalPadding: Style.spacing.controlPaddingY
+              onClicked: root.winNewsMode = true
+            }
+
+            Button {
+              visible: root.winNewsMode
+              radius: root.cornerRadius
+              text: "Back"
+              tooltipText: "Back to armory"
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              horizontalPadding: Style.spacing.controlPaddingX
+              verticalPadding: Style.spacing.controlPaddingY
+              onClicked: root.winNewsMode = false
+            }
+
+            Button {
               radius: root.cornerRadius
               text: "\u2715"
               tooltipText: "Close"
@@ -1420,6 +1452,7 @@ Panel {
           PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
 
           SiteLinks {
+            visible: !root.winNewsMode
             Layout.fillWidth: true
             fg: root.fg
             dim: root.dim
@@ -1428,6 +1461,7 @@ Panel {
           }
 
           CategoryPills {
+            visible: !root.winNewsMode
             Layout.fillWidth: true
             items: root.items
             kinds: root.kinds
@@ -1439,6 +1473,7 @@ Panel {
           }
 
           RowLayout {
+            visible: !root.winNewsMode
             Layout.fillWidth: true
             spacing: Style.space(6)
 
@@ -1493,7 +1528,7 @@ Panel {
               spacing: Style.space(8)
 
               Text {
-                visible: root.filtered.length === 0
+                visible: !root.winNewsMode && root.filtered.length === 0
                 Layout.fillWidth: true
                 text: "No items match."
                 color: root.dim
@@ -1503,6 +1538,7 @@ Panel {
               }
 
               GridLayout {
+                visible: !root.winNewsMode
                 Layout.fillWidth: true
                 Layout.bottomMargin: Style.space(2)
                 columns: root.winGridColumns
@@ -1538,9 +1574,10 @@ Panel {
               }
 
             NewsList {
+              visible: root.winNewsMode
               Layout.fillWidth: true
               items: root.news
-              maxItems: 5
+              maxItems: root.news.length
               compact: false
               fg: root.fg
               dim: root.dim
@@ -1553,7 +1590,9 @@ Panel {
           // Help pinned to the bottom of the window.
           Text {
             Layout.fillWidth: true
-            text: "←→ ↑↓ · jk hl select · enter open · / search · r refresh · esc close"
+            text: root.winNewsMode
+              ? "click an article to open it · r refresh · esc back"
+              : "←→ ↑↓ · jk hl select · enter open · / search · r refresh · esc close"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
