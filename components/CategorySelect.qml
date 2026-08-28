@@ -32,13 +32,16 @@ Item {
 
   // The kit Dropdown defaults to Style.spacing.dropdownWidth (240px), which
   // crowds the popup's search row — pin a compact trigger width instead.
+  // Heights are rounded so the 1px border lands on the device-pixel grid;
+  // raw TextField implicitHeight carries fractional font metrics and the
+  // border renders smeared across two rows.
   implicitWidth: Style.space(150)
-  implicitHeight: root.rowHeight
+  implicitHeight: Math.round(root.rowHeight)
 
   Dropdown {
     id: drop
     anchors.fill: parent
-    rowHeight: root.rowHeight
+    rowHeight: Math.round(root.rowHeight)
     showLabel: false
     options: root.options
     value: root.activeKind

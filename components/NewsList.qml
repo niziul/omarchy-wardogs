@@ -44,14 +44,21 @@ Item {
     Repeater {
       model: root.shown
 
-      delegate: Rectangle {
+      // Row chrome uses the kit's control tokens so the border weight and
+      // hover state match the search field and dropdown exactly. Row height
+      // is rounded — Text metrics are fractional and smear a 1px border.
+      delegate: BorderSurface {
         required property var modelData
         Layout.fillWidth: true
-        implicitHeight: inner.implicitHeight + Style.space(8)
+        implicitHeight: Math.round(inner.implicitHeight) + Style.space(8)
         radius: Style.cornerRadius
-        color: Qt.rgba(fg.r, fg.g, fg.b, hover.hovered ? 0.12 : 0.05)
-        border.color: Qt.rgba(fg.r, fg.g, fg.b, hover.hovered ? 0.28 : 0.08)
-        border.width: 1
+        color: hover.hovered ? Style.hoverFillFor(fg, accentColor) : "transparent"
+        borderSpec: hover.hovered
+          ? Border.controlSpec("hover-cursor", fg, accentColor)
+          : Border.controlSpec("normal", fg, accentColor)
+
+        // Components don't inherit Panel's accent; use the theme accent.
+        readonly property color accentColor: Color.accent
 
         ColumnLayout {
           id: inner

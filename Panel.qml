@@ -924,7 +924,7 @@ Panel {
 
               CategorySelect {
                 Layout.alignment: Qt.AlignVCenter
-                rowHeight: searchInput.implicitHeight
+                rowHeight: Math.round(searchInput.implicitHeight)
                 items: root.items
                 kinds: root.kinds
                 activeKind: root.activeKind
@@ -1222,7 +1222,7 @@ Panel {
 
     Layout.fillWidth: true
     color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.055)
-    borderSpec: Border.flat(Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.08), 1)
+    borderSpec: Border.controlSpec("normal", root.fg, Color.accent)
     radius: Style.cornerRadius
     padding: Style.space(10)
     implicitHeight: body.implicitHeight + contentTopInset + contentBottomInset
@@ -1347,9 +1347,14 @@ Panel {
         id: winCard
         readonly property real sw: taskWindow.screen ? taskWindow.screen.width : Screen.width
         readonly property real sh: taskWindow.screen ? taskWindow.screen.height : Screen.height
+        // Fractional card geometry puts every child border on half pixels,
+        // where a 1px line anti-aliases across two device rows. Round both
+        // the size and the centered position to keep borders crisp.
         anchors.centerIn: parent
-        width: Math.max(Style.space(500), Math.min(sw * 0.5, sw - Style.space(80)))
-        height: Math.max(Style.space(420), Math.min(sh * 0.7, sh - Style.space(80)))
+        width: Math.round(Math.max(Style.space(500), Math.min(sw * 0.5, sw - Style.space(80))))
+        height: Math.round(Math.max(Style.space(420), Math.min(sh * 0.7, sh - Style.space(80))))
+        x: Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
         color: Color.popups.background
         radius: Style.cornerRadius
         padding: Style.space(14)
@@ -1501,7 +1506,7 @@ Panel {
 
             CategorySelect {
               Layout.alignment: Qt.AlignVCenter
-              rowHeight: winSearchInput.implicitHeight
+              rowHeight: Math.round(winSearchInput.implicitHeight)
               items: root.items
               kinds: root.kinds
               activeKind: root.activeKind

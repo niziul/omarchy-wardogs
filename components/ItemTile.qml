@@ -6,8 +6,10 @@ import qs.Ui
 
 // One armory tile: large item artwork on top, name underneath. Icons are the
 // identity of the list, so the tile gives them the majority of the surface.
-// Pure presentation — all data comes in as properties.
-Rectangle {
+// Pure presentation — all data comes in as properties. Chrome (fill, border)
+// rides the kit's shared control-state tokens so the tile's rest/hover/
+// selected borders match the search field, dropdown, and buttons exactly.
+BorderSurface {
   id: tile
   property string name: ""
   property string url: ""
@@ -19,14 +21,18 @@ Rectangle {
   property string fontFamily: ""
   signal openRequested
 
-  readonly property color baseColor: Qt.rgba(fg.r, fg.g, fg.b, (selected || hovered) ? 0.12 : 0.045)
-  readonly property color borderColor: Qt.rgba(fg.r, fg.g, fg.b, (selected || hovered) ? 0.38 : 0.08)
+  readonly property color accentColor: Color.accent
+  readonly property bool hot: hovered || selected
+
+  color: selected ? Style.selectedFillFor(fg, accentColor)
+    : hovered     ? Style.hoverFillFor(fg, accentColor)
+    : "transparent"
+  borderSpec: selected ? Border.controlSpec("selected", fg, accentColor)
+    : hovered          ? Border.controlSpec("hover-cursor", fg, accentColor)
+    :                  Border.controlSpec("normal", fg, accentColor)
+  radius: Style.cornerRadius
 
   implicitHeight: Style.space(118)
-  radius: Style.cornerRadius
-  color: baseColor
-  border.color: borderColor
-  border.width: 1
   clip: true
 
   HoverHandler {

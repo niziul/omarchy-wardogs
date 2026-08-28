@@ -23,14 +23,19 @@ Item {
     model: root.links
     boundsBehavior: Flickable.StopAtBounds
 
-    delegate: Rectangle {
+    delegate: BorderSurface {
       required property var modelData
+      // Chip chrome rides the kit's control tokens so rest/hover borders
+      // match the search field. Width is rounded off the Text metrics so the
+      // 1px vertical borders stay on the device-pixel grid.
+      readonly property color accentColor: Color.accent
       implicitHeight: Style.space(26)
-      width: lab.implicitWidth + Style.space(16)
-      radius: 0
-      color: Qt.rgba(fg.r, fg.g, fg.b, hover.hovered ? 0.16 : 0.06)
-      border.color: Qt.rgba(fg.r, fg.g, fg.b, hover.hovered ? 0.4 : 0.1)
-      border.width: 1
+      width: Math.round(lab.implicitWidth) + Style.space(16)
+      radius: Style.cornerRadius
+      color: hover.hovered ? Style.hoverFillFor(fg, accentColor) : "transparent"
+      borderSpec: hover.hovered
+        ? Border.controlSpec("hover-cursor", fg, accentColor)
+        : Border.controlSpec("normal", fg, accentColor)
 
       Text {
         id: lab
