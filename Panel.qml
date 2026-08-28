@@ -92,6 +92,10 @@ Panel {
   readonly property color dim: Qt.rgba(fg.r, fg.g, fg.b, 0.62)
   readonly property string fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
   readonly property int maxStdioBytes: 524288
+  // Style.cornerRadius mirrors Hyprland's decoration:rounding, which is 0 on
+  // this setup — so the shared kit renders square-cornered controls. The
+  // plugin pins its own radius so buttons keep rounded borders on any theme.
+  readonly property real cornerRadius: Style.space(8)
 
   readonly property int refreshSeconds: {
     var v = Number(root.setting("refreshIntervalSec", 300))
@@ -760,6 +764,7 @@ Panel {
 
         Button {
           visible: !root.settingsMode
+          radius: root.cornerRadius
           text: "\uF021"
           tooltipText: "Refresh"
           foreground: root.fg
@@ -772,6 +777,7 @@ Panel {
 
         Button {
           visible: !root.settingsMode
+          radius: root.cornerRadius
           text: "\uF013"
           tooltipText: "Open settings"
           foreground: root.fg
@@ -784,6 +790,7 @@ Panel {
 
         Button {
           visible: root.settingsMode
+          radius: root.cornerRadius
           text: "Back"
           tooltipText: "Back to armory"
           foreground: root.fg
@@ -796,6 +803,7 @@ Panel {
 
         Button {
           visible: root.settingsMode
+          radius: root.cornerRadius
           text: "Save"
           tooltipText: "Save settings"
           foreground: root.fg
@@ -885,6 +893,7 @@ Panel {
 
               Button {
                 visible: root.searchText !== ""
+                radius: root.cornerRadius
                 text: "\u2715"
                 tooltipText: "Clear search"
                 foreground: root.fg
@@ -917,6 +926,7 @@ Panel {
 
               Button {
                 visible: root.items.length === 0 && !root.indexLoading
+                radius: root.cornerRadius
                 text: "Retry"
                 tooltipText: "Try fetching the armory again"
                 foreground: root.fg
@@ -1054,6 +1064,7 @@ Panel {
                   spacing: Style.space(8)
 
                   Button {
+                    radius: root.cornerRadius
                     text: "Prefetch all icons"
                     tooltipText: "Download every item icon into the local cache"
                     foreground: root.fg
@@ -1330,6 +1341,7 @@ Panel {
             }
 
             Button {
+              radius: root.cornerRadius
               text: "\uF021"
               tooltipText: "Refresh"
               foreground: root.fg
@@ -1341,6 +1353,7 @@ Panel {
             }
 
             Button {
+              radius: root.cornerRadius
               text: "\uF1CA"
               tooltipText: "Open loadout hub"
               foreground: root.fg
@@ -1352,6 +1365,7 @@ Panel {
             }
 
             Button {
+              radius: root.cornerRadius
               text: "\u2715"
               tooltipText: "Close"
               foreground: root.fg
@@ -1407,6 +1421,7 @@ Panel {
 
             Button {
               visible: root.searchText !== ""
+              radius: root.cornerRadius
               text: "\u2715"
               tooltipText: "Clear search"
               foreground: root.fg
