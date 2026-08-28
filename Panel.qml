@@ -93,9 +93,9 @@ Panel {
   readonly property string fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
   readonly property int maxStdioBytes: 524288
   // Style.cornerRadius mirrors Hyprland's decoration:rounding, which is 0 on
-  // this setup — so the shared kit renders square-cornered controls. The
-  // plugin pins its own radius so buttons keep rounded borders on any theme.
-  readonly property real cornerRadius: Style.space(8)
+  // this setup. The plugin pins its own radius so button corners stay
+  // consistent regardless of theme/Hyprland changes — 0 keeps them square.
+  readonly property real cornerRadius: 0
 
   readonly property int refreshSeconds: {
     var v = Number(root.setting("refreshIntervalSec", 300))
