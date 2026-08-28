@@ -767,6 +767,24 @@ Panel {
         readonly property bool revealTools: (headerHover.hovered || popupToolsScope.activeFocus)
           && !root.settingsMode && !root.newsMode
 
+        Item {
+          Layout.fillWidth: true
+          implicitHeight: headerHero.implicitHeight
+
+          PanelHero {
+            id: headerHero
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : "Wardogs Zone"
+            meta: (root.settingsMode || root.newsMode) ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
+            foreground: root.fg
+            fontFamily: root.fontFamily
+            iconComponent: heroIconComponent
+          }
+        }
+
+        // The toolbar expands to the right of the hero badge on hover/focus.
         FocusScope {
           id: popupToolsScope
           visible: headerRow.revealTools
@@ -784,23 +802,6 @@ Panel {
               // hand it back so esc/j/k keep driving the panel.
               keyCatcher.forceActiveFocus()
             }
-          }
-        }
-
-        Item {
-          Layout.fillWidth: true
-          implicitHeight: headerHero.implicitHeight
-
-          PanelHero {
-            id: headerHero
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : "Wardogs Zone"
-            meta: (root.settingsMode || root.newsMode) ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
-            foreground: root.fg
-            fontFamily: root.fontFamily
-            iconComponent: heroIconComponent
           }
         }
 
@@ -1401,6 +1402,24 @@ Panel {
 
             readonly property bool revealTools: winHeaderHover.hovered || winToolsScope.activeFocus
 
+            Item {
+              Layout.fillWidth: true
+              implicitHeight: winHero.implicitHeight
+
+              PanelHero {
+                id: winHero
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                title: root.winNewsMode ? "Wardogs News" : "Wardogs Zone"
+                meta: root.winNewsMode ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
+                foreground: root.fg
+                fontFamily: root.fontFamily
+                iconComponent: heroIconComponent
+              }
+            }
+
+            // The toolbar expands to the right of the hero badge on hover/focus.
             FocusScope {
               id: winToolsScope
               visible: winHeaderRow.revealTools
@@ -1416,23 +1435,6 @@ Panel {
                   root.openItem(url)
                   winKeys.forceActiveFocus()
                 }
-              }
-            }
-
-            Item {
-              Layout.fillWidth: true
-              implicitHeight: winHero.implicitHeight
-
-              PanelHero {
-                id: winHero
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                title: root.winNewsMode ? "Wardogs News" : "Wardogs Zone"
-                meta: root.winNewsMode ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
-                foreground: root.fg
-                fontFamily: root.fontFamily
-                iconComponent: heroIconComponent
               }
             }
 
