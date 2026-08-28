@@ -133,4 +133,61 @@ test("kindAndCaliber joins type and caliber", function() {
   assert.strictEqual(M.kindAndCaliber({ type: "Weapon", caliber: "" }), "Weapon");
 });
 
+var sampleRss = [
+  "<?xml version=\"1.0\"?>",
+  "<rss><channel>",
+  "<item><title>Hello &amp; World</title><link>https://wardogs.zone/news/hello</link>",
+  "<guid>https://wardogs.zone/news/hello</guid>",
+  "<pubDate>Tue, 25 Aug 2026 12:00:00 GMT</pubDate>",
+  "<category>Game News</category>",
+  "<description>A short &lt;preview&gt;.</description></item>",
+  "<item><title></title><link>https://wardogs.zone/news/skip</link></item>",
+  "<item><title>Second</title><link>https://wardogs.zone/news/second</link></item>",
+  "</channel></rss>"
+].join("");
+
+test("parseRss extracts items and skips empty titles", function() {
+  var rows = M.parseRss(sampleRss);
+  assert.strictEqual(rows.length, 2);
+  assert.strictEqual(rows[0].title, "Hello & World");
+  assert.strictEqual(rows[0].link, "https://wardogs.zone/news/hello");
+  assert.strictEqual(rows[0].category, "Game News");
+  assert.strictEqual(rows[0].description, "A short <preview>.");
+  assert.strictEqual(rows[1].title, "Second");
+});
+
+test("parseRss returns [] on garbage", function() {
+  assert.deepStrictEqual(M.parseRss("not xml"), []);
+  assert.deepStrictEqual(M.parseRss(""), []);
+});
+
+test("newestGuid is the first item's guid", function() {
+  var rows = M.parseRss(sampleRss);
+  assert.strictEqual(M.newestGuid(rows), "https://wardogs.zone/news/hello");
+  assert.strictEqual(M.newestGuid([]), "");
+});
+
+test("relativeDate formats RFC-822 timestamps", function() {
+  var now = Date.parse("Tue, 25 Aug 2026 12:00:00 GMT");
+  assert.strictEqual(M.relativeDate("Tue, 25 Aug 2026 12:00:00 GMT", now), "just now");
+  assert.strictEqual(M.relativeDate("Tue, 25 Aug 2026 11:00:00 GMT", now), "1h ago");
+  assert.strictEqual(M.relativeDate("Mon, 24 Aug 2026 12:00:00 GMT", now), "1d ago");
+  assert.strictEqual(M.relativeDate("not-a-date"), "not-a-date");
+});
+
+test("parseNewsCache round-trips a JSON array", function() {
+  var rows = M.parseRss(sampleRss);
+  var back = M.parseNewsCache(JSON.stringify(rows));
+  assert.strictEqual(back.length, 2);
+  assert.strictEqual(back[0].title, "Hello & World");
+  assert.deepStrictEqual(M.parseNewsCache("nope"), []);
+});
+
+test("siteLinks returns the six wardogs.zone tool routes", function() {
+  var links = M.siteLinks();
+  assert.strictEqual(links.length, 6);
+  assert.strictEqual(links[0].url, "https://wardogs.zone/loadouts");
+  assert.ok(links[5].url.indexOf("community") !== -1);
+});
+
 if (failed) process.exit(1);

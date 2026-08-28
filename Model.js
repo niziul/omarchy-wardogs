@@ -97,12 +97,16 @@ function fuzzyScore(needle, haystack) {
     if (at === -1) return -1
     if (at === prev + 1) score += 3
     else score += 1
-    if (at === 0 || h.charAt(at - 1) === " ") score += 2
+    if (isWordStart(h, at)) score += 2
     prev = at
     from = at + 1
   }
   score += Math.max(0, 6 - Math.floor(h.length / 8))
   return score
+}
+
+function isWordStart(h, at) {
+  return at === 0 || h.charAt(at - 1) === " "
 }
 
 function itemHaystack(it) {
@@ -193,6 +197,101 @@ function kindAndCaliber(item) {
   return bits.join(" · ")
 }
 
+function unescapeXml(s) {
+  return String(s || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+}
+
+function tagText(block, tag) {
+  var open = "<" + tag + ">"
+  var close = "</" + tag + ">"
+  var xml = String(block || "")
+  var a = xml.indexOf(open)
+  if (a === -1) return ""
+  var b = xml.indexOf(close, a)
+  if (b === -1) return ""
+  return unescapeXml(xml.substring(a + open.length, b))
+}
+
+function parseRssItem(block) {
+  var title = tagText(block, "title")
+  var link = tagText(block, "link")
+  if (title === "" || link === "") return null
+  var guid = tagText(block, "guid")
+  return {
+    title: title,
+    link: link,
+    guid: guid === "" ? link : guid,
+    pubDate: tagText(block, "pubDate"),
+    category: tagText(block, "category"),
+    description: tagText(block, "description")
+  }
+}
+
+function parseRss(raw) {
+  var xml = String(raw || "")
+  var out = []
+  var from = 0
+  while (true) {
+    var a = xml.indexOf("<item>", from)
+    if (a === -1) break
+    var b = xml.indexOf("</item>", a)
+    if (b === -1) break
+    var row = parseRssItem(xml.substring(a, b))
+    if (row) out.push(row)
+    from = b + 7
+  }
+  return out
+}
+
+function parseNewsCache(raw) {
+  try {
+    var data = JSON.parse(String(raw || "[]"))
+    return Array.isArray(data) ? data : []
+  } catch (e) {
+    return []
+  }
+}
+
+function newestGuid(items) {
+  if (!items || items.length === 0) return ""
+  return String(items[0].guid || items[0].link || "")
+}
+
+function formatAge(sec) {
+  if (sec < 60) return "just now"
+  if (sec < 3600) return Math.floor(sec / 60) + "m ago"
+  if (sec < 86400) return Math.floor(sec / 3600) + "h ago"
+  if (sec < 604800) return Math.floor(sec / 86400) + "d ago"
+  return Math.floor(sec / 604800) + "w ago"
+}
+
+function relativeDate(pubDate, nowMs) {
+  var t = Date.parse(String(pubDate || ""))
+  if (!isFinite(t)) return String(pubDate || "")
+  var now = Date.now()
+  if (isFinite(nowMs)) now = nowMs
+  var sec = Math.max(0, Math.floor((now - t) / 1000))
+  return formatAge(sec)
+}
+
+var SITE_LINKS = [
+  { label: "Loadouts", url: "https://wardogs.zone/loadouts" },
+  { label: "Calculators", url: "https://wardogs.zone/calculators/damage" },
+  { label: "Maps", url: "https://wardogs.zone/maps/kavkazi" },
+  { label: "Wiki", url: "https://wardogs.zone/wiki" },
+  { label: "Updates", url: "https://wardogs.zone/updates" },
+  { label: "Community", url: "https://wardogs.zone/community" }
+]
+
+function siteLinks() {
+  return SITE_LINKS
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     parseIndex: parseIndex,
@@ -209,6 +308,14 @@ if (typeof module !== "undefined") {
     iconFileName: iconFileName,
     parseHealth: parseHealth,
     shortVersion: shortVersion,
-    kindAndCaliber: kindAndCaliber
+    kindAndCaliber: kindAndCaliber,
+    unescapeXml: unescapeXml,
+    tagText: tagText,
+    parseRssItem: parseRssItem,
+    parseRss: parseRss,
+    parseNewsCache: parseNewsCache,
+    newestGuid: newestGuid,
+    relativeDate: relativeDate,
+    siteLinks: siteLinks
   }
 }

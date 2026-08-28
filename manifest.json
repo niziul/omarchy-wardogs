@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "niziul",
   "license": "MIT",
-  "description": "WARDOGS armory browser + live game build status, fed by the public wardogs.zone API.",
+  "description": "WARDOGS armory browser, live build status, and Wardogs Zone news — fed by the public wardogs.zone API.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
@@ -20,8 +20,9 @@
       "alwaysShow": true,
       "defaultKind": "weapon",
       "filterText": "",
-      "notifyOnNewVersion": true
-    },
+        "notifyOnNewVersion": true,
+        "notifyOnNewNews": true
+      },
     "schema": [
       {
         "key": "refreshIntervalSec",
@@ -54,6 +55,12 @@
         "key": "notifyOnNewVersion",
         "type": "boolean",
         "label": "Notify when the WARDOGS build version changes",
+        "defaultValue": true
+      },
+      {
+        "key": "notifyOnNewNews",
+        "type": "boolean",
+        "label": "Notify when Wardogs Zone publishes a new article",
         "defaultValue": true
       }
     ]

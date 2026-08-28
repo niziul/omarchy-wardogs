@@ -60,6 +60,10 @@ Panel {
   property int healthRetries: 0
   property string seenVersion: ""
   property bool seenFileLoaded: false
+  property var news: []
+  property int newsRetries: 0
+  property string newsSeenGuid: ""
+  property bool newsSeenFileLoaded: false
 
   // --- item icons ----------------------------------------------------------
   // Artwork lives at https://wardogs.zone/game/icons/{id}.png. Downloaded
@@ -80,6 +84,8 @@ Panel {
   // --- derived & theming ---------------------------------------------------
   readonly property string stateFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/seen.json"
   readonly property string indexCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/index.json"
+  readonly property string newsCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news.json"
+  readonly property string newsSeenFilePath: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news-seen.json"
   readonly property string notifyBin: (Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/bin/omarchy-notification-send"
   readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
   readonly property color dim: Qt.rgba(fg.r, fg.g, fg.b, 0.62)
@@ -101,8 +107,10 @@ Panel {
   function refresh() {
     root.indexRetries = 0
     root.healthRetries = 0
+    root.newsRetries = 0
     if (!indexProc.running) indexProc.running = true
     if (!healthProc.running) healthProc.running = true
+    if (!newsProc.running) newsProc.running = true
   }
 
   function onIndex(raw) {
@@ -150,6 +158,55 @@ Panel {
     if (root.healthRetries >= 3) return
     root.healthRetries++
     healthRetryTimer.restart()
+  }
+
+  function onNews(raw) {
+    var parsed = Model.parseRss(root.truncateStdio(raw))
+    if (!parsed || parsed.length === 0) { root.scheduleNewsRetry(); return }
+    root.news = parsed
+    newsCache.setText(JSON.stringify(parsed))
+    root.maybeNotifyNewNews()
+  }
+
+  function onNewsCacheLoaded(raw) {
+    if (root.news.length > 0) return
+    var parsed = Model.parseNewsCache(root.truncateStdio(raw))
+    if (!parsed || parsed.length === 0) return
+    root.news = parsed
+  }
+
+  function scheduleNewsRetry() {
+    if (root.newsRetries >= 3) return
+    root.newsRetries++
+    newsRetryTimer.restart()
+  }
+
+  function maybeNotifyNewNews() {
+    var newest = Model.newestGuid(root.news)
+    if (newest === "") return
+    if (!root.newsSeenFileLoaded) {
+      newsSeenFile.reload()
+      return
+    }
+    if (root.newsSeenGuid !== "" && root.newsSeenGuid !== newest) {
+      if (root.setting("notifyOnNewNews", true) === true)
+        sendNotification("New on Wardogs Zone", root.news[0].title)
+    }
+    if (root.newsSeenGuid !== newest) {
+      root.newsSeenGuid = newest
+      newsSeenFile.setText(JSON.stringify({ guid: newest }))
+    }
+  }
+
+  function onNewsSeenLoaded(raw) {
+    var g = ""
+    try {
+      var data = JSON.parse(String(raw || "{}"))
+      g = data && data.guid ? String(data.guid) : ""
+    } catch (e) {}
+    root.newsSeenFileLoaded = true
+    root.newsSeenGuid = g
+    if (root.news.length > 0) root.maybeNotifyNewNews()
   }
 
   function truncateStdio(raw) {
@@ -339,6 +396,7 @@ Panel {
     next.refreshIntervalSec = Math.round(clamp(isFinite(interval) ? interval : 300, 60, 86400))
     next.alwaysShow = next.alwaysShow !== false
     next.notifyOnNewVersion = next.notifyOnNewVersion !== false
+    next.notifyOnNewNews = next.notifyOnNewNews !== false
     next.defaultKind = String(next.defaultKind || "weapon")
     next.filterText = String(next.filterText || "")
     return next
@@ -393,7 +451,7 @@ Panel {
     }
   }
 
-  readonly property var settingsItems: [alwaysShowToggle, notifyToggle, filterField, refreshField]
+  readonly property var settingsItems: [alwaysShowToggle, notifyToggle, notifyNewsToggle, filterField, refreshField]
 
   function currentSettingsIndex() {
     var win = contentColumn && contentColumn.Window.window ? contentColumn.Window.window : null
@@ -480,6 +538,12 @@ Panel {
     onTriggered: if (!healthProc.running) healthProc.running = true
   }
 
+  Timer {
+    id: newsRetryTimer
+    interval: 2500
+    onTriggered: if (!newsProc.running) newsProc.running = true
+  }
+
   Process {
     id: indexProc
     command: ["curl", "-fsS", "--max-time", "5", "https://wardogs.zone/api/search-index"]
@@ -495,6 +559,15 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.onHealth(root.truncateStdio(text))
+    }
+  }
+
+  Process {
+    id: newsProc
+    command: ["curl", "-fsS", "--max-time", "5", "https://wardogs.zone/news/rss.xml"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.onNews(root.truncateStdio(text))
     }
   }
 
@@ -520,6 +593,26 @@ Panel {
     printErrors: false
     onLoaded: root.onCacheLoaded(text())
     onLoadFailed: root.onCacheLoaded("")
+  }
+
+  FileView {
+    id: newsCache
+    path: root.newsCacheFile
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: root.onNewsCacheLoaded(text())
+    onLoadFailed: root.onNewsCacheLoaded("")
+  }
+
+  FileView {
+    id: newsSeenFile
+    path: root.newsSeenFilePath
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: root.onNewsSeenLoaded(text())
+    onLoadFailed: root.onNewsSeenLoaded("{}")
   }
 
   // Tiny python state helper (local file only; see scripts/persist.py).
@@ -581,6 +674,8 @@ Panel {
     root.searchText = root.setting("filterText", "")
     seenFile.reload()
     indexCache.reload()
+    newsCache.reload()
+    newsSeenFile.reload()
     iconScanProc.running = true
     root.refresh()
   }
@@ -708,6 +803,15 @@ Panel {
       }
 
       PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
+
+      SiteLinks {
+        visible: !root.settingsMode
+        Layout.fillWidth: true
+        fg: root.fg
+        dim: root.dim
+        fontFamily: root.fontFamily
+        onOpenRequested: function(url) { root.openItem(url) }
+      }
 
       Flickable {
         id: scroller
@@ -852,6 +956,17 @@ Panel {
                 }
               }
             }
+
+            NewsList {
+              Layout.fillWidth: true
+              items: root.news
+              maxItems: 3
+              compact: true
+              fg: root.fg
+              dim: root.dim
+              fontFamily: root.fontFamily
+              onOpenRequested: function(url) { root.openItem(url) }
+            }
           }
 
           // ---------- settings ----------
@@ -985,6 +1100,18 @@ Panel {
                   accent: Color.accent
                   fontFamily: root.fontFamily
                   onClicked: root.setDraftValue("notifyOnNewVersion", !checked)
+                }
+
+                Toggle {
+                  Layout.fillWidth: true
+                  id: notifyNewsToggle
+                  label: "Notify on new news"
+                  description: checked ? "Popup when Wardogs Zone publishes an article" : "No news popup"
+                  checked: root.draftValue("notifyOnNewNews", true) === true
+                  foreground: root.fg
+                  accent: Color.accent
+                  fontFamily: root.fontFamily
+                  onClicked: root.setDraftValue("notifyOnNewNews", !checked)
                 }
 
                 Text {
@@ -1222,7 +1349,14 @@ Panel {
 
           PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
 
-          // Same filter row as the popup: categories + search.
+          SiteLinks {
+            Layout.fillWidth: true
+            fg: root.fg
+            dim: root.dim
+            fontFamily: root.fontFamily
+            onOpenRequested: function(url) { root.openItem(url) }
+          }
+
           CategoryPills {
             Layout.fillWidth: true
             items: root.items
@@ -1331,7 +1465,18 @@ Panel {
                   }
                 }
               }
+
+            NewsList {
+              Layout.fillWidth: true
+              items: root.news
+              maxItems: 5
+              compact: false
+              fg: root.fg
+              dim: root.dim
+              fontFamily: root.fontFamily
+              onOpenRequested: function(url) { root.openItem(url) }
             }
+          }
           }
 
           // Help pinned to the bottom of the window.
