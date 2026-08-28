@@ -791,30 +791,25 @@ Panel {
             fontFamily: root.fontFamily
             iconComponent: heroIconComponent
           }
+        }
 
-          // Overlay: revealed on hover/focus but never participates in the
-          // row layout, so the header geometry never shifts while the
-          // toolbar appears (the reflow used to jump the hero text).
-          FocusScope {
-            id: popupToolsScope
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            z: 10
-            visible: headerRow.revealTools
-            implicitWidth: popupSiteLinks.implicitWidth
-            implicitHeight: popupSiteLinks.implicitHeight
+        // The toolbar expands to the right of the hero badge on hover/focus.
+        FocusScope {
+          id: popupToolsScope
+          visible: headerRow.revealTools
+          implicitWidth: popupSiteLinks.implicitWidth
+          implicitHeight: popupSiteLinks.implicitHeight
 
-            SiteLinks {
-              id: popupSiteLinks
-              fg: root.fg
-              fontFamily: root.fontFamily
-              cornerRadius: root.cornerRadius
-              onOpenRequested: function(url) {
-                root.openItem(url)
-                // Clicking a button pulls focus out of the key catcher;
-                // hand it back so esc/j/k keep driving the panel.
-                keyCatcher.forceActiveFocus()
-              }
+          SiteLinks {
+            id: popupSiteLinks
+            fg: root.fg
+            fontFamily: root.fontFamily
+            cornerRadius: root.cornerRadius
+            onOpenRequested: function(url) {
+              root.openItem(url)
+              // Clicking a button pulls focus out of the key catcher;
+              // hand it back so esc/j/k keep driving the panel.
+              keyCatcher.forceActiveFocus()
             }
           }
         }
@@ -1447,27 +1442,23 @@ Panel {
                 fontFamily: root.fontFamily
                 iconComponent: heroIconComponent
               }
+            }
 
-              // Overlay like the popup header: no layout participation, no
-              // reflow when the toolbar reveals.
-              FocusScope {
-                id: winToolsScope
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                z: 10
-                visible: winHeaderRow.revealTools
-                implicitWidth: winSiteLinks.implicitWidth
-                implicitHeight: winSiteLinks.implicitHeight
+            // The toolbar expands to the right of the hero badge on hover/focus.
+            FocusScope {
+              id: winToolsScope
+              visible: winHeaderRow.revealTools
+              implicitWidth: winSiteLinks.implicitWidth
+              implicitHeight: winSiteLinks.implicitHeight
 
-                SiteLinks {
-                  id: winSiteLinks
-                  fg: root.fg
-                  fontFamily: root.fontFamily
-                  cornerRadius: root.cornerRadius
-                  onOpenRequested: function(url) {
-                    root.openItem(url)
-                    winKeys.forceActiveFocus()
-                  }
+              SiteLinks {
+                id: winSiteLinks
+                fg: root.fg
+                fontFamily: root.fontFamily
+                cornerRadius: root.cornerRadius
+                onOpenRequested: function(url) {
+                  root.openItem(url)
+                  winKeys.forceActiveFocus()
                 }
               }
             }
