@@ -107,7 +107,7 @@ BorderSurface {
       elide: Text.ElideRight
       maximumLineCount: 2
       horizontalAlignment: Text.AlignHCenter
-      verticalAlignment: Text.AlignTop
+      verticalAlignment: Text.AlignVCenter
     }
   }
 }

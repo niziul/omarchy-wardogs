@@ -331,7 +331,7 @@ Panel {
     var dest = root.iconDir + "/" + Model.iconFileName(id)
     var url = Model.iconUrlFor(id)
     return ["sh", "-c",
-      "mkdir -p \"${2%/*}\"; if curl -fsS --max-time 10 -o \"$2.part\" \"$1\"; then magick \"$2.part\" -alpha set -background none -channel RGB -fill white -colorize 100% -resize '192x192>' -extent 192x192 \"$2\" && rm -f \"$2.part\" || { mv \"$2.part\" \"$2\"; }; else rm -f \"$2.part\"; exit 1; fi",
+      "mkdir -p \"${2%/*}\"; if curl -fsS --max-time 10 -o \"$2.part\" \"$1\"; then magick \"$2.part\" -trim +repage -alpha set -background none -gravity center -channel RGB -fill white -colorize 100% -resize '192x192>' -extent 192x192 \"$2\" && rm -f \"$2.part\" || { mv \"$2.part\" \"$2\"; }; else rm -f \"$2.part\"; exit 1; fi",
       "sh", url, dest]
   }
 
@@ -652,7 +652,7 @@ Panel {
   Process {
     id: iconScanProc
     command: ["sh", "-c",
-      "mkdir -p \"$1\"; mogrify -channel RGB -fill white -colorize 100% -alpha set -background none -gravity center -resize '192x192>' -extent 192x192 \"$1\"/*.png 2>/dev/null || true; ls -1 \"$1\" || true",
+      "mkdir -p \"$1\"; mogrify -trim +repage -alpha set -background none -gravity center -channel RGB -fill white -colorize 100% -resize '192x192>' -extent 192x192 \"$1\"/*.png 2>/dev/null || true; ls -1 \"$1\" || true",
       "sh", root.iconDir]
     stdout: StdioCollector {
       waitForEnd: true
