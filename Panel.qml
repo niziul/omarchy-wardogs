@@ -10,6 +10,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -1202,8 +1203,11 @@ Panel {
       width: Style.font.display
       height: Style.font.display
 
-      // Plugin emblem (ships with the plugin, no network needed).
+      // Plugin emblem (ships with the plugin, no network needed). Ships as a
+      // white alpha-mask, tinted here to the theme foreground so it matches
+      // the bar widget and tinted armory tiles on any theme.
       Image {
+        id: heroImg
         anchors.fill: parent
         anchors.margins: Style.space(1)
         source: Qt.resolvedUrl("assets/icon.png")
@@ -1211,6 +1215,13 @@ Panel {
         fillMode: Image.PreserveAspectFit
         mipmap: true
         smooth: true
+      }
+
+      ColorOverlay {
+        anchors.fill: heroImg
+        visible: heroImg.status === Image.Ready
+        source: heroImg
+        color: root.fg
       }
     }
   }
