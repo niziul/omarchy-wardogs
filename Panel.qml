@@ -948,6 +948,7 @@ Panel {
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
+                horizontalAlignment: Text.AlignHCenter
               }
 
               Button {
@@ -1527,12 +1528,16 @@ Panel {
               spacing: Style.space(8)
 
               Text {
-                visible: !root.winNewsMode && root.filtered.length === 0
+                visible: !root.winNewsMode
                 Layout.fillWidth: true
-                text: "No items match."
+                text: root.items.length === 0
+                  ? (root.indexLoading ? "Loading armory…" : "Offline — can't reach wardogs.zone")
+                  : (root.filtered.length === 0
+                      ? "No items match."
+                      : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)"))
                 color: root.dim
                 font.family: root.fontFamily
-                font.pixelSize: Style.font.body
+                font.pixelSize: Style.font.caption
                 horizontalAlignment: Text.AlignHCenter
               }
 
