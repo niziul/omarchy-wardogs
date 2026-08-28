@@ -28,6 +28,7 @@ Item {
       delegate: Button {
         required property var modelData
         radius: root.cornerRadius
+        focusable: true
         iconText: modelData.glyph
         tooltipText: modelData.label
         foreground: root.fg

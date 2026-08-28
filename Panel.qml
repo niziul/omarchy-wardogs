@@ -756,8 +756,30 @@ Panel {
       spacing: Style.space(12)
 
       RowLayout {
+        id: headerRow
         Layout.fillWidth: true
         spacing: 8
+
+        // Hovering anywhere on the header reveals the site-link toolbar;
+        // keyboard focus on one of its buttons keeps it visible.
+        HoverHandler { id: headerHover }
+
+        readonly property bool revealTools: (headerHover.hovered || popupToolsScope.activeFocus)
+          && !root.settingsMode && !root.newsMode
+
+        FocusScope {
+          id: popupToolsScope
+          visible: headerRow.revealTools
+          implicitHeight: popupSiteLinks.implicitHeight
+
+          SiteLinks {
+            id: popupSiteLinks
+            fg: root.fg
+            fontFamily: root.fontFamily
+            cornerRadius: root.cornerRadius
+            onOpenRequested: function(url) { root.openItem(url) }
+          }
+        }
 
         Item {
           Layout.fillWidth: true
@@ -841,15 +863,6 @@ Panel {
           active: true
           onClicked: root.saveSettings()
         }
-      }
-
-      SiteLinks {
-        visible: !root.settingsMode && !root.newsMode
-        Layout.fillWidth: true
-        fg: root.fg
-        fontFamily: root.fontFamily
-        cornerRadius: root.cornerRadius
-        onOpenRequested: function(url) { root.openItem(url) }
       }
 
       PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
@@ -1372,8 +1385,29 @@ Panel {
           spacing: Style.space(12)
 
           RowLayout {
+            id: winHeaderRow
             Layout.fillWidth: true
             spacing: 8
+
+            // Hovering anywhere on the window header reveals the site-link
+            // toolbar; keyboard focus on one of its buttons keeps it visible.
+            HoverHandler { id: winHeaderHover }
+
+            readonly property bool revealTools: winHeaderHover.hovered || winToolsScope.activeFocus
+
+            FocusScope {
+              id: winToolsScope
+              visible: winHeaderRow.revealTools
+              implicitHeight: winSiteLinks.implicitHeight
+
+              SiteLinks {
+                id: winSiteLinks
+                fg: root.fg
+                fontFamily: root.fontFamily
+                cornerRadius: root.cornerRadius
+                onOpenRequested: function(url) { root.openItem(url) }
+              }
+            }
 
             Item {
               Layout.fillWidth: true
@@ -1453,15 +1487,6 @@ Panel {
               verticalPadding: Style.spacing.controlPaddingY
               onClicked: root.winOpen = false
             }
-          }
-
-          SiteLinks {
-            visible: !root.winNewsMode
-            Layout.fillWidth: true
-            fg: root.fg
-            fontFamily: root.fontFamily
-            cornerRadius: root.cornerRadius
-            onOpenRequested: function(url) { root.openItem(url) }
           }
 
           PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
