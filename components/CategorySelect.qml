@@ -14,6 +14,9 @@ Item {
   property string activeKind: ""
   property color fg: Qt.rgba(1, 1, 1, 0.9)
   property string fontFamily: ""
+  // Height of the trigger box. Bind it to the neighboring TextField's height
+  // so the borders line up exactly; defaults to the kit control height.
+  property real rowHeight: Style.spacing.controlHeight
   signal setKind(string kind)
 
   readonly property var options: {
@@ -30,11 +33,12 @@ Item {
   // The kit Dropdown defaults to Style.spacing.dropdownWidth (240px), which
   // crowds the popup's search row — pin a compact trigger width instead.
   implicitWidth: Style.space(150)
-  implicitHeight: drop.implicitHeight
+  implicitHeight: root.rowHeight
 
   Dropdown {
     id: drop
     anchors.fill: parent
+    rowHeight: root.rowHeight
     showLabel: false
     options: root.options
     value: root.activeKind

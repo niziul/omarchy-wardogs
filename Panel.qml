@@ -923,6 +923,8 @@ Panel {
               }
 
               CategorySelect {
+                Layout.alignment: Qt.AlignVCenter
+                rowHeight: searchInput.implicitHeight
                 items: root.items
                 kinds: root.kinds
                 activeKind: root.activeKind
@@ -1497,6 +1499,8 @@ Panel {
             }
 
             CategorySelect {
+              Layout.alignment: Qt.AlignVCenter
+              rowHeight: winSearchInput.implicitHeight
               items: root.items
               kinds: root.kinds
               activeKind: root.activeKind
