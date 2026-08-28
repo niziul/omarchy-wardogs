@@ -281,12 +281,14 @@ Panel {
 
   // --- item icons ------------------------------------------------------------
   // Local file url for an id, or "" while the icon is not cached yet. Reads
-  // iconEpoch so callers' bindings re-run once downloads land.
+  // iconEpoch so callers' bindings re-run once downloads land, and appends it
+  // as a query so Image reloads the file after an in-place whitespace/normalize
+  // pass (same path, new cache key) instead of serving stale pixels.
   function iconFileUrl(id) {
     var epoch = root.iconEpoch
     var name = Model.iconFileName(id)
     if (name === "" || epoch < 0 || !root.cachedIcons[name]) return ""
-    return "file://" + root.iconDir + "/" + name
+    return "file://" + root.iconDir + "/" + name + "?v=" + epoch
   }
 
   function requestIcon(id) {
@@ -309,14 +311,15 @@ Panel {
 
   // Atomic download + normalize: curl -f writes no body on 404, the .part
   // rename keeps half-written files out of the cache, and magick pads every
-  // icon onto a uniform 96x96 transparent square so tiles render at a
-  // consistent size regardless of the source art's native dimensions.
+  // icon onto a uniform 96x96 transparent square AND whitens the artwork so
+  // tiles render at a consistent size regardless of the source dimensions
+  // and re-tint cleanly to the theme foreground (alpha-mask + ColorOverlay).
   // Exit 0 only when the file actually landed.
   function iconFetchCommand(id) {
     var dest = root.iconDir + "/" + Model.iconFileName(id)
     var url = Model.iconUrlFor(id)
     return ["sh", "-c",
-      "mkdir -p \"${2%/*}\"; if curl -fsS --max-time 10 -o \"$2.part\" \"$1\"; then magick \"$2.part\" -alpha set -background none -gravity center -resize '96x96>' -extent 96x96 \"$2\" && rm -f \"$2.part\" || { mv \"$2.part\" \"$2\"; }; else rm -f \"$2.part\"; exit 1; fi",
+      "mkdir -p \"${2%/*}\"; if curl -fsS --max-time 10 -o \"$2.part\" \"$1\"; then magick \"$2.part\" -alpha set -background none -channel RGB -fill white -colorize 100% -resize '96x96>' -extent 96x96 \"$2\" && rm -f \"$2.part\" || { mv \"$2.part\" \"$2\"; }; else rm -f \"$2.part\"; exit 1; fi",
       "sh", url, dest]
   }
 
@@ -621,12 +624,14 @@ Panel {
   }
 
   // One-shot cache pass at startup: migrate any pre-normalization icons
-  // onto the uniform 96x96 square (idempotent), then learn which files are
-  // already on disk so they render instantly without touching the network.
+  // onto the uniform 96x96 square AND whiten them into an alpha mask so the
+  // ColorOverlay tint always yields full theme-foreground contrast (idempotent
+  // — re-running on already-whitened files is a no-op), then learn which files
+  // are on disk so they render instantly without touching the network.
   Process {
     id: iconScanProc
     command: ["sh", "-c",
-      "mkdir -p \"$1\"; mogrify -alpha set -background none -gravity center -resize '96x96>' -extent 96x96 \"$1\"/*.png 2>/dev/null || true; ls -1 \"$1\" || true",
+      "mkdir -p \"$1\"; mogrify -channel RGB -fill white -colorize 100% -alpha set -background none -gravity center -resize '96x96>' -extent 96x96 \"$1\"/*.png 2>/dev/null || true; ls -1 \"$1\" || true",
       "sh", root.iconDir]
     stdout: StdioCollector {
       waitForEnd: true

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 import qs.Commons
 import qs.Ui
 
@@ -47,13 +48,14 @@ Rectangle {
       Layout.preferredWidth: Style.space(56)
       Layout.preferredHeight: Style.space(56)
 
-      // Artwork fills a square slot; every cached icon is already a 96x96
-      // padded square, so all tiles render at a consistent size. Synchronous
-      // decode (tiny local files) avoids glyph-flash while the grid rebuilds.
+      // Artwork fills a square slot; every cached icon is a 96x96 transparent
+      // square already whitened into an alpha mask at fetch time, so the
+      // ColorOverlay re-tints it to the theme foreground. This keeps dark art
+      // readable on any theme and re-colors instantly when the theme swaps.
       Image {
         id: iconImg
         anchors.fill: parent
-        visible: tile.iconSource !== "" && status !== Image.Error
+        visible: tile.iconSource !== ""
         source: tile.iconSource
         asynchronous: false
         fillMode: Image.PreserveAspectFit
@@ -61,6 +63,14 @@ Rectangle {
         smooth: true
         sourceSize.width: 96
         sourceSize.height: 96
+      }
+
+      ColorOverlay {
+        anchors.fill: iconImg
+        visible: iconImg.status === Image.Ready
+        source: iconImg
+        color: tile.fg
+        cached: false
       }
 
       Text {
