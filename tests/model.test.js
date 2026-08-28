@@ -213,6 +213,13 @@ test("subcategories lists unique sorted types for a kind with counts", function(
   assert.deepStrictEqual(M.subcategories([], "weapon"), []);
 });
 
+test("normalizeItem precomputes a lowercase haystack for the fuzzy find", function() {
+  var it = M.normalizeItem({ id: "x", name: "AK-74M", type: "Assault Rifle", caliber: "5.45x39mm" });
+  assert.ok(it._hay === "ak-74m assault rifle 5.45x39mm");
+  // Hand-built items without _hay still match (fallback lowercases).
+  assert.strictEqual(M.filterItems([{ id: "y", name: "AK-74M", type: "Assault Rifle" }], "", "ak"), 1);
+});
+
 test("filterItems with empty kind searches across all kinds", function() {
   // The popup passes kind "" while a query is active so fuzzy find spans
   // every category and subcategory.

@@ -22,12 +22,19 @@ function parseIndex(raw) {
 // One index row -> a normalized object, or null when it cannot be shown.
 function normalizeItem(it) {
   if (!it || !it.id || !it.name) return null
+  var name = cleanName(it.name)
+  var type = String(it.type || "")
+  var caliber = String(it.caliber || "")
   return {
     id: String(it.id),
-    name: cleanName(it.name),
+    name: name,
     kind: String(it.kind || "other"),
-    type: String(it.type || ""),
-    caliber: String(it.caliber || "")
+    type: type,
+    caliber: caliber,
+    // Precomputed fuzzy-search text. filterItems runs against 565 items on
+    // every keystroke — building and lowercasing this per hit dominated the
+    // find cost, so it is paid once at parse time.
+    _hay: (name + " " + type + " " + caliber).toLowerCase()
   }
 }
 
@@ -85,9 +92,8 @@ function itemCountByKind(items, kind) {
 // order (not necessarily adjacent). Bonuses reward contiguous runs and
 // word-boundary hits; a length nudge prefers specific (short) haystacks.
 // Returns -1 when the needle is not a subsequence, else a score >= 0.
-function fuzzyScore(needle, haystack) {
-  var n = String(needle || "").toLowerCase()
-  var h = String(haystack || "").toLowerCase()
+// Core scorer over already-lowercase inputs (hot path — see filterItems).
+function scoreAgainst(n, h) {
   if (n === "") return 0
   var score = 0
   var from = 0
@@ -105,12 +111,19 @@ function fuzzyScore(needle, haystack) {
   return score
 }
 
+function fuzzyScore(needle, haystack) {
+  return scoreAgainst(String(needle || "").toLowerCase(), String(haystack || "").toLowerCase())
+}
+
 function isWordStart(h, at) {
   return at === 0 || h.charAt(at - 1) === " "
 }
 
 function itemHaystack(it) {
-  return String((it && it.name) || "") + " " + String((it && it.type) || "") + " " + String((it && it.caliber) || "")
+  // Parsed items carry a precomputed lowercase haystack; hand-built items
+  // (tests) fall back to building one, lowercased to match.
+  if (it && it._hay !== undefined) return it._hay
+  return (String((it && it.name) || "") + " " + String((it && it.type) || "") + " " + String((it && it.caliber) || "")).toLowerCase()
 }
 
 // Rank rows best-first: fuzzy score descending, name as the tiebreaker.
@@ -125,7 +138,8 @@ function filterItems(items, kind, query) {
   for (var i = 0; i < (items || []).length; i++) {
     var it = items[i]
     if (kind && it.kind !== kind) continue
-    var score = fuzzyScore(q, itemHaystack(it).toLowerCase())
+    // q and the haystack are both lowercase here — no per-item normalization.
+    var score = scoreAgainst(q, itemHaystack(it))
     if (score === -1) continue
     rows.push({ it: it, score: score })
   }
