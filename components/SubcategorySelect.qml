@@ -32,7 +32,13 @@ Item {
   implicitWidth: Style.space(170)
   implicitHeight: Math.round(root.rowHeight)
 
+  // The kit Dropdown assigns `value` imperatively on selection, which breaks
+  // the declarative binding — so external resets (kind switch clears
+  // activeSub) must be re-pushed into it explicitly.
+  onActiveSubChanged: drop.value = root.activeSub
+
   Dropdown {
+    id: drop
     anchors.fill: parent
     rowHeight: Math.round(root.rowHeight)
     showLabel: false
