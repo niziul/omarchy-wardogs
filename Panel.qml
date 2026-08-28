@@ -106,8 +106,12 @@ Panel {
     if (!isFinite(v)) v = 300
     return Math.round(clamp(v, 60, 86400))
   }
-  readonly property var filtered: Model.bySubcategory(
-    Model.filterItems(root.items, root.activeKind, root.searchText), root.activeSub)
+  // With a query the fuzzy find spans every category and subcategory (the
+  // haystack already covers name, type, and caliber); the dropdowns only
+  // scope the unsearched browse view.
+  readonly property var filtered: root.searchText !== ""
+    ? Model.filterItems(root.items, "", root.searchText)
+    : Model.bySubcategory(Model.filterItems(root.items, root.activeKind, root.searchText), root.activeSub)
   readonly property string onlineText: root.health.ok ? "online" : "offline"
   readonly property bool indexLoading: indexProc.running || indexRetryTimer.running
 
@@ -989,7 +993,9 @@ Panel {
                   ? (root.indexLoading ? "Loading armory…" : "Offline — can't reach wardogs.zone")
                   : (root.filtered.length === 0
                       ? "No items match."
-                      : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)"))
+                      : (root.searchText !== ""
+                          ? "Search · " + root.filtered.length + " item(s) across categories"
+                          : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)")))
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -1615,7 +1621,9 @@ Panel {
                   ? (root.indexLoading ? "Loading armory…" : "Offline — can't reach wardogs.zone")
                   : (root.filtered.length === 0
                       ? "No items match."
-                      : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)"))
+                      : (root.searchText !== ""
+                          ? "Search · " + root.filtered.length + " item(s) across categories"
+                          : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)")))
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption

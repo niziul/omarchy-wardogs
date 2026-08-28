@@ -213,6 +213,15 @@ test("subcategories lists unique sorted types for a kind with counts", function(
   assert.deepStrictEqual(M.subcategories([], "weapon"), []);
 });
 
+test("filterItems with empty kind searches across all kinds", function() {
+  // The popup passes kind "" while a query is active so fuzzy find spans
+  // every category and subcategory.
+  var rows = M.filterItems(subItems, "", "a");
+  assert.strictEqual(rows.length, 3); // A, C (weapons) + E (ammo)
+  var none = M.filterItems(subItems, "", "zz");
+  assert.deepStrictEqual(none, []);
+});
+
 test("bySubcategory filters by type and passes through on empty", function() {
   var base = M.filterItems(subItems, "weapon", "");
   assert.strictEqual(base.length, 4);
