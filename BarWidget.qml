@@ -20,12 +20,8 @@ BarWidget {
     if (panelLoader.item && panelLoader.item.refresh) panelLoader.item.refresh()
   }
 
-  function togglePanel() {
+  function toggle() {
     if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()
-  }
-
-  function toggleWindow() {
-    if (panelLoader.item && panelLoader.item.toggleWindow) panelLoader.item.toggleWindow()
   }
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
@@ -75,8 +71,8 @@ BarWidget {
     onPressed: function(b) {
       if (!root.bar) return
       if (b === Qt.RightButton) { if (panelLoader.item && panelLoader.item.openSettings) panelLoader.item.openSettings() }
-      else if (b === Qt.MiddleButton) root.toggleWindow()
-      else root.togglePanel()
+      else if (b === Qt.MiddleButton) { if (panelLoader.item && panelLoader.item.openHub) panelLoader.item.openHub() }
+      else root.toggle()
     }
 
     Row {

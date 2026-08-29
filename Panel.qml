@@ -2,10 +2,10 @@
 // wardogs.zone API (weather-plugin pattern: curl in a Process, curl -fsS
 // --max-time, bounded retries, last-good data kept on failure).
 //
-// Left click opens the armory popup · right click settings · middle click a
-// free-floating window. Keyboard works everywhere: ↑↓/jk select across the
-// list, enter opens the item in the browser, r refresh, s settings, q quit
-// the search field, esc close.
+// Left click opens a free-floating, full-width overlay window · right click
+// settings · middle click the loadout hub. Keyboard works everywhere:
+// ↑↓/jk select across the list, enter opens the item in the browser, r
+// refresh, s settings, / search, esc back then close.
 
 import QtQuick
 import QtQuick.Layouts
@@ -24,7 +24,7 @@ Panel {
 
   moduleName: "niziul.wardogs"
   ipcTarget: "niziul.wardogs"
-  manageIpc: false
+  manageIpc: true
 
   property var anchorItem: null
   property var hostWidget: null
@@ -54,12 +54,9 @@ Panel {
   readonly property bool showInBar: root.setting("alwaysShow", true) === true || root.health.ok
   property bool settingsMode: false
   property bool newsMode: false
-  property bool winNewsMode: false
-  property bool winOpen: false
   // Keyboard/mouse coexistence: the selection ring only tracks the cursor
   // while keyboard navigation is active; mouse hover suspends it.
   property bool keyboardMode: true
-  property int panelCursor: 0
   property int winCursor: 0
   property var draftSettings: ({})
   property string settingsStatusText: ""
@@ -90,8 +87,7 @@ Panel {
   property var failedIcons: ({})       // ids whose icon 404'd; skipped this session
   readonly property int iconsPending: root.iconQueue.length + (root.iconFetchingId !== "" ? 1 : 0)
 
-  // Icon-forward grid: tiles per row for the popup and the standalone window.
-  readonly property int panelGridColumns: 4
+  // Icon-forward grid: tiles per row for the overlay window.
   readonly property int winGridColumns: 5
 
   // --- derived & theming ---------------------------------------------------
@@ -297,13 +293,12 @@ Panel {
     root.bar.run("xdg-open 'https://wardogs.zone/loadouts/hub'")
   }
 
-  // Big free-floating window (middle-click on the bar pill, or IPC).
+  // The free-floating overlay window (left/middle click on the bar pill, or IPC).
   function toggleWindow() {
-    root.winOpen = !root.winOpen
-    if (root.winOpen) {
-      root.winNewsMode = false
-      root.refresh()
-      root.requestVisibleIcons()
+    root.toggle()
+    if (root.opened) {
+      root.settingsMode = false
+      root.newsMode = false
     }
   }
 
@@ -357,9 +352,9 @@ Panel {
   }
 
   // Queue icons for whatever the user is currently looking at. No-op while
-  // every surface showing the list is closed, so shell startup stays offline.
+  // the overlay is closed, so shell startup stays offline.
   function requestVisibleIcons() {
-    if (!root.opened && !root.winOpen) return
+    if (!root.opened) return
     for (var i = 0; i < root.filtered.length; i++) requestIcon(root.filtered[i].id)
   }
 
@@ -371,33 +366,20 @@ Panel {
   property int navTotal: root.filtered.length
 
   onNavTotalChanged: {
-    if (root.panelCursor >= root.navTotal) root.panelCursor = Math.max(0, root.navTotal - 1)
     if (root.winCursor >= root.navTotal) root.winCursor = Math.max(0, root.navTotal - 1)
-    ensurePanelCursorVisible()
+    ensureWinCursorVisible()
   }
 
   // Grid navigation: dx moves one column, dy moves one full row.
-  function moveCursor(which, dx, dy) {
+  function moveWinCursor(dx, dy) {
     root.keyboardMode = true
     if (root.navTotal === 0) return
-    var cols = which === "win" ? root.winGridColumns : root.panelGridColumns
-    var cur = which === "win" ? root.winCursor : root.panelCursor
-    var next = clamp(cur + (dx || 0) + (dy || 0) * cols, 0, root.navTotal - 1)
-    if (which === "win") { root.winCursor = next; ensureWinCursorVisible() }
-    else { root.panelCursor = next; ensurePanelCursorVisible() }
+    var next = clamp(root.winCursor + (dx || 0) + (dy || 0) * root.winGridColumns, 0, root.navTotal - 1)
+    root.winCursor = next
+    ensureWinCursorVisible()
   }
 
   // Keep the keyboard-selected row on screen while arrowing through the list.
-  function ensurePanelCursorVisible() {
-    var item = panelRepeater.itemAt(root.panelCursor)
-    if (!item) return
-    var y = item.mapToItem(scroller.contentItem, 0, 0).y
-    if (y < scroller.contentY + Style.space(4))
-      scroller.contentY = Math.max(0, y - Style.space(36))
-    else if (y + item.height > scroller.contentY + scroller.height - Style.space(4))
-      scroller.contentY = y + item.height - scroller.height + Style.space(8)
-  }
-
   function ensureWinCursorVisible() {
     var item = winRepeater.itemAt(root.winCursor)
     if (!item) return
@@ -408,8 +390,8 @@ Panel {
       winScroller.contentY = y + item.height - winScroller.height + Style.space(8)
   }
 
-  function activateCursor(which) {
-    var i = which === "win" ? root.winCursor : root.panelCursor
+  function activateWinCursor() {
+    var i = root.winCursor
     if (i < 0 || i >= root.filtered.length) return
     openItem(Model.itemUrl(root.filtered[i].id))
   }
@@ -455,27 +437,27 @@ Panel {
     settingsMode = true
     newsMode = false
     open()
-    focusPanelKeys()
+    focusWinKeys()
   }
 
   function showMain() {
     settingsMode = false
     newsMode = false
     settingsStatusText = ""
-    focusPanelKeys()
+    focusWinKeys()
   }
 
   function openNews() {
     newsMode = true
     settingsMode = false
     open()
-    focusPanelKeys()
+    focusWinKeys()
   }
 
-  // The popup surface maps asynchronously, so a single callLater focus can
+  // The overlay window maps asynchronously, so a single callLater focus can
   // fire before the layer-shell window exists and silently no-op. Retry for
   // a bounded time until the key catcher actually holds active focus.
-  function focusPanelKeys() {
+  function focusWinKeys() {
     focusRetryTimer.attempts = 0
     focusRetryTimer.restart()
   }
@@ -486,16 +468,16 @@ Panel {
     repeat: true
     property int attempts: 0
     onTriggered: {
-      if (!keyCatcher || keyCatcher.activeFocus || attempts > 25) { stop(); return }
+      if (!winKeys || winKeys.activeFocus || attempts > 25) { stop(); return }
       attempts++
-      keyCatcher.forceActiveFocus()
+      winKeys.forceActiveFocus()
     }
   }
 
   readonly property var settingsItems: [alwaysShowToggle, notifyToggle, notifyNewsToggle, filterField, refreshField]
 
   function currentSettingsIndex() {
-    var win = contentColumn && contentColumn.Window.window ? contentColumn.Window.window : null
+    var win = winKeys ? winKeys.Window.window : null
     if (!win || !win.activeFocusItem) return -1
     var it = win.activeFocusItem
     while (it) {
@@ -552,16 +534,13 @@ Panel {
     refresh()
     requestVisibleIcons()
     // Keyboard nav owns focus on open; "/" or a click moves it to search.
-    focusPanelKeys()
+    focusWinKeys()
   }
-  onWinOpenChanged: requestVisibleIcons()
   onActiveKindChanged: {
-    root.panelCursor = 0
     root.winCursor = 0
     requestVisibleIcons()
   }
   onSearchTextChanged: {
-    root.panelCursor = 0
     root.winCursor = 0
     requestVisibleIcons()
   }
@@ -741,564 +720,6 @@ Panel {
     root.refresh()
   }
 
-  KeyboardPanel {
-    id: panel
-    anchorItem: root.anchorItem
-    owner: root
-    bar: root.bar
-    open: root.opened
-    // Centered under the bar (F1-sessions style) instead of hugging the pill.
-    centerOnBar: true
-    focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(440))
-    contentHeight: panel.fittedContentHeight(Style.space(520))
-
-    PanelKeyCatcher {
-      id: keyCatcher
-      anchors.fill: parent
-      blocked: searchInput.activeFocus
-      // Esc backs out of settings/news first; only then closes the panel.
-      onCloseRequested: (root.settingsMode || root.newsMode) ? root.showMain() : root.close()
-      onMoveRequested: function(dx, dy) {
-        if (root.newsMode) return
-        if (root.settingsMode) {
-          if (dy !== 0) root.moveSettingsFocus(dy)
-          return
-        }
-        if (dx === 0 && dy === 0) return
-        root.moveCursor("panel", dx, dy)
-      }
-      onTabRequested: function(direction) {
-        if (root.settingsMode) root.moveSettingsFocus(direction)
-      }
-      onActivateRequested: function() {
-        if (root.newsMode) return
-        if (!root.settingsMode) { root.activateCursor("panel"); return }
-        var cur = root.currentSettingsItem()
-        if (cur && typeof cur.clicked === "function") cur.clicked()
-      }
-      onTextKey: function(t) {
-        if ((t === "r" || t === "R") && !root.settingsMode) root.refresh()
-        else if (t === "s" || t === "S") { root.settingsMode ? root.saveSettings() : root.openSettings() }
-        else if (t === "h" || t === "H") { if (!root.settingsMode) root.openHub() }
-        else if (t === "/" && !root.settingsMode && !root.newsMode) {
-          searchInput.forceActiveFocus()
-          searchInput.cursorPosition = searchInput.text.length
-        }
-      }
-    }
-
-    ColumnLayout {
-      id: contentColumn
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.top: parent.top
-      anchors.bottom: parent.bottom
-      spacing: Style.space(12)
-
-      RowLayout {
-        id: headerRow
-        Layout.fillWidth: true
-        spacing: 8
-
-        // Hovering anywhere on the header reveals the site-link toolbar;
-        // keyboard focus on one of its buttons keeps it visible.
-        HoverHandler { id: headerHover }
-
-        readonly property bool revealTools: (headerHover.hovered || popupToolsScope.activeFocus)
-          && !root.settingsMode && !root.newsMode
-
-        Item {
-          Layout.fillWidth: true
-          implicitHeight: headerHero.implicitHeight
-
-          PanelHero {
-            id: headerHero
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : "Wardogs Zone"
-            meta: (root.settingsMode || root.newsMode) ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
-            foreground: root.fg
-            fontFamily: root.fontFamily
-            iconComponent: heroIconComponent
-          }
-        }
-
-        // The toolbar expands to the right of the hero badge on hover/focus.
-        FocusScope {
-          id: popupToolsScope
-          visible: headerRow.revealTools
-          implicitWidth: popupSiteLinks.implicitWidth
-          implicitHeight: popupSiteLinks.implicitHeight
-
-          SiteLinks {
-            id: popupSiteLinks
-            fg: root.fg
-            fontFamily: root.fontFamily
-            cornerRadius: root.cornerRadius
-            onOpenRequested: function(url) {
-              root.openItem(url)
-              // Clicking a button pulls focus out of the key catcher;
-              // hand it back so esc/j/k keep driving the panel.
-              keyCatcher.forceActiveFocus()
-            }
-          }
-        }
-
-        Button {
-          visible: !root.settingsMode
-          radius: root.cornerRadius
-          text: "\uF021"
-          tooltipText: "Refresh"
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          onClicked: root.refresh()
-        }
-
-        Button {
-          visible: !root.settingsMode && !root.newsMode
-          radius: root.cornerRadius
-          text: "\uF013"
-          tooltipText: "Open settings"
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          onClicked: root.openSettings()
-        }
-
-        Button {
-          visible: !root.settingsMode && !root.newsMode
-          radius: root.cornerRadius
-          text: "\uF09E"
-          tooltipText: "News feed"
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          onClicked: root.openNews()
-        }
-
-        Button {
-          visible: root.settingsMode || root.newsMode
-          radius: root.cornerRadius
-          text: "Back"
-          tooltipText: "Back to armory"
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          onClicked: root.showMain()
-        }
-
-        Button {
-          visible: root.settingsMode
-          radius: root.cornerRadius
-          text: "Save"
-          tooltipText: "Save settings"
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          active: true
-          onClicked: root.saveSettings()
-        }
-      }
-
-      PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
-
-      // Pinned search row: stays above the scrolling grid so the field and
-      // category picker never scroll away.
-      RowLayout {
-        visible: !root.settingsMode && !root.newsMode
-        Layout.fillWidth: true
-        spacing: Style.space(6)
-
-        TextField {
-          id: searchInput
-          Layout.fillWidth: true
-          placeholderText: root.searchPlaceholder
-          foreground: root.fg
-          accent: Color.accent
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
-          text: root.searchText
-          // Read the field (not the signal arg): this engine binds
-          // handler params by the signal's declared name, so a renamed
-          // arg arrives undefined.
-          onTextEdited: root.searchText = searchInput.text
-          // Blur AND hand focus back to the key catcher — otherwise the
-          // catcher stays dead and a second Esc no longer closes the panel
-          // (the window's field does exactly this with winKeys).
-          Keys.onEscapePressed: { searchInput.focus = false; keyCatcher.forceActiveFocus() }
-          Keys.onUpPressed: { searchInput.focus = false; root.moveCursor("panel", 0, -1) }
-          Keys.onDownPressed: { searchInput.focus = false; root.moveCursor("panel", 0, 1) }
-          Keys.onReturnPressed: root.activateCursor("panel")
-          Keys.onEnterPressed: root.activateCursor("panel")
-        }
-
-        Button {
-          visible: root.searchText !== ""
-          radius: root.cornerRadius
-          text: "\u2715"
-          tooltipText: "Clear search"
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.spacing.controlPaddingX
-          verticalPadding: Style.spacing.controlPaddingY
-          onClicked: {
-            root.searchText = ""
-            searchInput.forceActiveFocus()
-          }
-        }
-
-        CategorySelect {
-          Layout.alignment: Qt.AlignVCenter
-          rowHeight: Math.round(searchInput.implicitHeight)
-          focusTarget: keyCatcher
-          items: root.items
-          kinds: root.kinds
-          activeKind: root.activeKind
-          fg: root.fg
-          fontFamily: root.fontFamily
-          onSetKind: function(k) {
-            root.activeKind = k
-            root.activeSub = ""
-          }
-        }
-
-        SubcategorySelect {
-          Layout.alignment: Qt.AlignVCenter
-          rowHeight: Math.round(searchInput.implicitHeight)
-          focusTarget: keyCatcher
-          items: root.items
-          activeKind: root.activeKind
-          activeSub: root.activeSub
-          fg: root.fg
-          fontFamily: root.fontFamily
-          onSetSub: function(s) { root.activeSub = s }
-        }
-      }
-
-      Flickable {
-        id: scroller
-        Layout.fillWidth: true
-        Layout.fillHeight: true
-        clip: true
-        contentWidth: width
-        contentHeight: bodyColumn.implicitHeight
-        boundsBehavior: Flickable.StopAtBounds
-
-        HoverHandler {
-          onHoveredChanged: if (hovered) root.panelCursor = Math.max(root.panelCursor, 0)
-        }
-
-          ColumnLayout {
-            id: bodyColumn
-            // Small inset so focus/selection borders never touch the
-            // Flickable's clip edge and get sliced.
-            x: Style.space(2)
-            width: scroller.width - Style.space(4)
-            spacing: Style.space(12)
-
-            // ---------- armory ----------
-            ColumnLayout {
-              visible: !root.settingsMode && !root.newsMode
-              Layout.fillWidth: true
-              spacing: Style.space(8)
-
-            RowLayout {
-              Layout.fillWidth: true
-              spacing: Style.space(8)
-
-              Text {
-                Layout.fillWidth: true
-                text: root.items.length === 0
-                  ? (root.indexLoading ? "Loading armory…" : "Offline — can't reach wardogs.zone")
-                  : (root.filtered.length === 0
-                      ? "No items match."
-                      : (root.searchText !== ""
-                          ? "Search · " + root.filtered.length + " item(s) across categories"
-                          : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)")))
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                horizontalAlignment: Text.AlignHCenter
-              }
-
-              Button {
-                visible: root.items.length === 0 && !root.indexLoading
-                radius: root.cornerRadius
-                text: "Retry"
-                tooltipText: "Try fetching the armory again"
-                foreground: root.fg
-                fontFamily: root.fontFamily
-                fontSize: Style.font.caption
-                horizontalPadding: Style.spacing.controlPaddingX
-                verticalPadding: Style.spacing.controlPaddingY
-                onClicked: root.refresh()
-              }
-            }
-
-            GridLayout {
-              Layout.fillWidth: true
-              Layout.bottomMargin: Style.space(2)
-              columns: root.panelGridColumns
-              columnSpacing: Style.space(6)
-              rowSpacing: Style.space(6)
-
-              HoverHandler {
-                onHoveredChanged: if (hovered) root.keyboardMode = false
-              }
-
-              Repeater {
-                id: panelRepeater
-                model: root.filtered
-
-                delegate: ItemTile {
-                  required property var modelData
-                  required property int index
-                  selected: root.keyboardMode && index === root.panelCursor
-                  name: modelData.name
-                  iconSource: root.iconFileUrl(modelData.id)
-                  url: Model.itemUrl(modelData.id)
-                  fg: root.fg
-                  dim: root.dim
-                  fontFamily: root.fontFamily
-                  // Clicking a tile moves the keyboard cursor with the mouse.
-                  onOpenRequested: {
-                    root.panelCursor = index
-                    root.openItem(url)
-                  }
-                  Layout.fillWidth: true
-                }
-              }
-            }
-            }
-
-            // ---------- news ----------
-            ColumnLayout {
-              visible: root.newsMode
-              Layout.fillWidth: true
-              spacing: Style.space(8)
-
-              Text {
-                Layout.fillWidth: true
-                visible: root.news.length === 0
-                text: root.indexLoading ? "Loading feed…" : "No news yet — offline?"
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-              }
-
-              NewsList {
-                Layout.fillWidth: true
-                items: root.news
-                maxItems: root.news.length
-                compact: false
-                fg: root.fg
-                dim: root.dim
-                fontFamily: root.fontFamily
-                onOpenRequested: function(url) { root.openItem(url) }
-              }
-          }
-
-          // ---------- settings ----------
-          ColumnLayout {
-            id: settingsSection
-            visible: root.settingsMode
-            Layout.fillWidth: true
-            spacing: Style.space(10)
-
-            Keys.onPressed: function(event) {
-              if (event.text === "j") { root.moveSettingsFocus(1); event.accepted = true }
-              else if (event.text === "k") { root.moveSettingsFocus(-1); event.accepted = true }
-              else if (event.text === "s" || event.text === "S") { root.saveSettings(); event.accepted = true }
-              else if (event.key === Qt.Key_Escape) { root.close(); event.accepted = true }
-            }
-
-            SectionCard {
-              title: "Data"
-
-              ColumnLayout {
-                width: parent.width
-                spacing: Style.space(8)
-
-                NumberField {
-                  id: refreshField
-                  property string settingKey: "refreshIntervalSec"
-                  label: "Refresh every (seconds)"
-                  value: Number(root.draftValue("refreshIntervalSec", 300))
-                  from: 60
-                  to: 86400
-                  stepSize: 60
-                  fieldWidth: parent.width
-                  foreground: root.fg
-                  accent: Color.accent
-                  fontFamily: root.fontFamily
-                  onModified: function(value) { root.setDraftValue("refreshIntervalSec", value) }
-                }
-
-                // Pick the startup category from the kinds the API actually
-                // reported — no free-text ids to mistype.
-                ColumnLayout {
-                  Layout.fillWidth: true
-                  spacing: Style.space(4)
-
-                  Text {
-                    text: "Default category"
-                    color: root.dim
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                  }
-
-                  CategorySelect {
-                    focusTarget: keyCatcher
-                    items: root.items
-                    kinds: root.kinds
-                    activeKind: String(root.draftValue("defaultKind", "weapon"))
-                    fg: root.fg
-                    fontFamily: root.fontFamily
-                    onSetKind: function(k) { root.setDraftValue("defaultKind", k) }
-                  }
-                }
-
-                TextField {
-                  Layout.fillWidth: true
-                  id: filterField
-                  property string settingKey: "filterText"
-                  placeholderText: "default filter (empty = none)"
-                  text: String(root.draftValue("filterText", ""))
-                  foreground: root.fg
-                  accent: Color.accent
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
-                  onTextEdited: root.setDraftValue("filterText", filterField.text)
-                }
-
-                RowLayout {
-                  Layout.fillWidth: true
-                  spacing: Style.space(8)
-
-                  Button {
-                    radius: root.cornerRadius
-                    text: "Prefetch all icons"
-                    tooltipText: "Download every item icon into the local cache"
-                    foreground: root.fg
-                    fontFamily: root.fontFamily
-                    fontSize: Style.font.caption
-                    horizontalPadding: Style.spacing.controlPaddingX
-                    verticalPadding: Style.spacing.controlPaddingY
-                    onClicked: root.prefetchAllIcons()
-                  }
-
-                  Text {
-                    Layout.fillWidth: true
-                    visible: root.iconsPending > 0
-                    text: "Fetching icons… " + root.iconsPending + " left"
-                    color: root.dim
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
-                  }
-                }
-              }
-            }
-
-            SectionCard {
-              title: "Behavior"
-
-              ColumnLayout {
-                width: parent.width
-                spacing: Style.space(8)
-
-                Toggle {
-                  Layout.fillWidth: true
-                  id: alwaysShowToggle
-                  label: "Always show icon"
-                  description: checked ? "Icon visible even while offline" : "Icon hidden when offline"
-                  checked: root.draftValue("alwaysShow", true) === true
-                  foreground: root.fg
-                  accent: Color.accent
-                  fontFamily: root.fontFamily
-                  onClicked: root.setDraftValue("alwaysShow", !checked)
-                }
-
-                Toggle {
-                  Layout.fillWidth: true
-                  id: notifyToggle
-                  label: "Notify on new build"
-                  description: checked ? "Popup when the WARDOGS build version changes" : "No build-change popup"
-                  checked: root.draftValue("notifyOnNewVersion", true) === true
-                  foreground: root.fg
-                  accent: Color.accent
-                  fontFamily: root.fontFamily
-                  onClicked: root.setDraftValue("notifyOnNewVersion", !checked)
-                }
-
-                Toggle {
-                  Layout.fillWidth: true
-                  id: notifyNewsToggle
-                  label: "Notify on new news"
-                  description: checked ? "Popup when Wardogs Zone publishes an article" : "No news popup"
-                  checked: root.draftValue("notifyOnNewNews", true) === true
-                  foreground: root.fg
-                  accent: Color.accent
-                  fontFamily: root.fontFamily
-                  onClicked: root.setDraftValue("notifyOnNewNews", !checked)
-                }
-
-                Text {
-                  visible: root.settingsStatusText !== ""
-                  Layout.fillWidth: true
-                  text: root.settingsStatusText
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  horizontalAlignment: Text.AlignHCenter
-                }
-              }
-             }
-           }
-         }
-       }
-
-      // Help pinned to the bottom of the panel — always visible, never scrolls.
-      Text {
-        visible: !root.settingsMode
-        Layout.fillWidth: true
-        text: root.newsMode
-          ? "click an article to open it · r refresh · esc back"
-          : "←→ ↑↓ · jk hl select · enter open · / search · r refresh · s settings · esc close"
-        color: root.dim
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-        wrapMode: Text.WordWrap
-        horizontalAlignment: Text.AlignHCenter
-      }
-
-      Text {
-        visible: root.settingsMode
-        Layout.fillWidth: true
-        text: "j/k or ↑↓ select · enter toggle · s save · esc back"
-        color: root.dim
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-        wrapMode: Text.WordWrap
-        horizontalAlignment: Text.AlignHCenter
-      }
-     }
-   }
-
   // Settings-only section wrapper.
   component SectionCard: BorderSurface {
     id: section
@@ -1381,24 +802,23 @@ Panel {
   IpcHandler {
     target: "niziul.wardogs.window"
     function toggle() { root.toggleWindow() }
-    function open() { if (!root.winOpen) root.toggleWindow() }
-    function close() { root.winOpen = false }
+    function open() { if (!root.opened) root.toggleWindow() }
+    function close() { root.close() }
   }
 
-  // Standalone quickshell window (middle-click on the bar widget).
+  // The free-floating overlay window (left/middle click on the bar widget).
   PanelWindow {
     id: taskWindow
-    visible: root.winOpen
+    visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.namespace: "niziul-wardogs-window"
-    WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.namespace: "niziul-wardogs-window"
+    WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
     onVisibleChanged: {
-      if (visible) Qt.callLater(function() { if (root.winOpen) winKeys.forceActiveFocus() })
-      else if (root.opened) root.close()
+      if (visible) Qt.callLater(function() { if (root.opened) winKeys.forceActiveFocus() })
     }
 
     Rectangle {
@@ -1407,7 +827,7 @@ Panel {
 
       MouseArea {
         anchors.fill: parent
-        onClicked: root.winOpen = false
+        onClicked: root.close()
       }
     }
 
@@ -1417,25 +837,41 @@ Panel {
       focus: true
 
       Keys.onEscapePressed: {
-        if (root.winNewsMode) root.winNewsMode = false
-        else root.winOpen = false
+        if (root.settingsMode || root.newsMode) root.showMain()
+        else root.close()
       }
-      Keys.onLeftPressed: if (!root.winNewsMode) root.moveCursor("win", -1, 0)
-      Keys.onRightPressed: if (!root.winNewsMode) root.moveCursor("win", 1, 0)
-      Keys.onUpPressed: if (!root.winNewsMode) root.moveCursor("win", 0, -1)
-      Keys.onDownPressed: if (!root.winNewsMode) root.moveCursor("win", 0, 1)
-      Keys.onReturnPressed: if (!root.winNewsMode) root.activateCursor("win")
-      Keys.onEnterPressed: if (!root.winNewsMode) root.activateCursor("win")
-      Keys.onSpacePressed: if (!root.winNewsMode) root.activateCursor("win")
+      Keys.onLeftPressed: if (!root.settingsMode && !root.newsMode) root.moveWinCursor(-1, 0)
+      Keys.onRightPressed: if (!root.settingsMode && !root.newsMode) root.moveWinCursor(1, 0)
+      Keys.onUpPressed: if (!root.settingsMode && !root.newsMode) root.moveWinCursor(0, -1)
+      Keys.onDownPressed: if (!root.settingsMode && !root.newsMode) root.moveWinCursor(0, 1)
+      Keys.onReturnPressed: {
+        if (root.settingsMode) { var cur = root.currentSettingsItem(); if (cur && typeof cur.clicked === "function") cur.clicked() }
+        else if (!root.newsMode) root.activateWinCursor()
+      }
+      Keys.onEnterPressed: {
+        if (root.settingsMode) { var cur = root.currentSettingsItem(); if (cur && typeof cur.clicked === "function") cur.clicked() }
+        else if (!root.newsMode) root.activateWinCursor()
+      }
+      Keys.onSpacePressed: if (!root.settingsMode && !root.newsMode) root.activateWinCursor()
       Keys.onPressed: function(event) {
         if (event.modifiers & Qt.ControlModifier || event.modifiers & Qt.AltModifier) return
         if (event.key === Qt.Key_R) root.refresh()
-        else if (root.winNewsMode) return
-        else if (event.key === Qt.Key_J || event.text === "j") root.moveCursor("win", 0, 1)
-        else if (event.key === Qt.Key_K || event.text === "k") root.moveCursor("win", 0, -1)
-        else if (event.text === "h" || event.text === "H") root.moveCursor("win", -1, 0)
-        else if (event.text === "l" || event.text === "L") root.moveCursor("win", 1, 0)
+        else if (root.settingsMode) {
+          if (event.text === "s" || event.text === "S") root.saveSettings()
+          else if (event.key === Qt.Key_J || event.text === "j") root.moveSettingsFocus(1)
+          else if (event.key === Qt.Key_K || event.text === "k") root.moveSettingsFocus(-1)
+          else if (event.text === "/" || event.key === Qt.Key_Escape) {}
+          return
+        }
+        else if (root.newsMode) return
+        else if (event.key === Qt.Key_J || event.text === "j") root.moveWinCursor(0, 1)
+        else if (event.key === Qt.Key_K || event.text === "k") root.moveWinCursor(0, -1)
+        else if (event.text === "h" || event.text === "H") root.openHub()
+        else if (event.text === "l" || event.text === "L") root.moveWinCursor(1, 0)
+        else if (event.text === "s" || event.text === "S") root.openSettings()
         else if (event.text === "/") {
+
+
           winSearchInput.forceActiveFocus()
           winSearchInput.cursorPosition = winSearchInput.text.length
         }
@@ -1449,7 +885,7 @@ Panel {
         // where a 1px line anti-aliases across two device rows. Round both
         // the size and the centered position to keep borders crisp.
         anchors.centerIn: parent
-        width: Math.round(Math.max(Style.space(500), Math.min(sw * 0.5, sw - Style.space(80))))
+        width: Math.round(Math.max(Style.space(500), sw - Style.space(80)))
         height: Math.round(Math.max(Style.space(420), Math.min(sh * 0.7, sh - Style.space(80))))
         x: Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 2)
@@ -1496,8 +932,8 @@ Panel {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                title: root.winNewsMode ? "Wardogs News" : "Wardogs Zone"
-                meta: root.winNewsMode ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
+                title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : "Wardogs Zone"
+                meta: (root.settingsMode || root.newsMode) ? "" : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
                 foreground: root.fg
                 fontFamily: root.fontFamily
                 iconComponent: heroIconComponent
@@ -1548,7 +984,7 @@ Panel {
             }
 
             Button {
-              visible: !root.winNewsMode
+              visible: !root.settingsMode && !root.newsMode
               radius: root.cornerRadius
               text: "\uF09E"
               tooltipText: "News feed"
@@ -1557,11 +993,24 @@ Panel {
               fontSize: Style.font.caption
               horizontalPadding: Style.spacing.controlPaddingX
               verticalPadding: Style.spacing.controlPaddingY
-              onClicked: root.winNewsMode = true
+              onClicked: root.openNews()
             }
 
             Button {
-              visible: root.winNewsMode
+              visible: !root.settingsMode && !root.newsMode
+              radius: root.cornerRadius
+              text: "\uF013"
+              tooltipText: "Open settings"
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              horizontalPadding: Style.spacing.controlPaddingX
+              verticalPadding: Style.spacing.controlPaddingY
+              onClicked: root.openSettings()
+            }
+
+            Button {
+              visible: root.settingsMode || root.newsMode
               radius: root.cornerRadius
               text: "Back"
               tooltipText: "Back to armory"
@@ -1570,7 +1019,21 @@ Panel {
               fontSize: Style.font.caption
               horizontalPadding: Style.spacing.controlPaddingX
               verticalPadding: Style.spacing.controlPaddingY
-              onClicked: root.winNewsMode = false
+              onClicked: root.showMain()
+            }
+
+            Button {
+              visible: root.settingsMode
+              radius: root.cornerRadius
+              text: "Save"
+              tooltipText: "Save settings"
+              foreground: root.fg
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              horizontalPadding: Style.spacing.controlPaddingX
+              verticalPadding: Style.spacing.controlPaddingY
+              active: true
+              onClicked: root.saveSettings()
             }
 
             Button {
@@ -1582,14 +1045,14 @@ Panel {
               fontSize: Style.font.caption
               horizontalPadding: Style.spacing.controlPaddingX
               verticalPadding: Style.spacing.controlPaddingY
-              onClicked: root.winOpen = false
+              onClicked: root.close()
             }
           }
 
           PanelSeparator { Layout.fillWidth: true; foreground: root.fg }
 
           RowLayout {
-            visible: !root.winNewsMode
+            visible: !root.settingsMode && !root.newsMode
             Layout.fillWidth: true
             spacing: Style.space(6)
 
@@ -1604,10 +1067,10 @@ Panel {
               text: root.searchText
               onTextEdited: root.searchText = winSearchInput.text
               Keys.onEscapePressed: winKeys.forceActiveFocus()
-              Keys.onUpPressed: { winSearchInput.focus = false; root.moveCursor("win", 0, -1) }
-              Keys.onDownPressed: { winSearchInput.focus = false; root.moveCursor("win", 0, 1) }
-              Keys.onReturnPressed: root.activateCursor("win")
-              Keys.onEnterPressed: root.activateCursor("win")
+              Keys.onUpPressed: { winSearchInput.focus = false; root.moveWinCursor(0, -1) }
+              Keys.onDownPressed: { winSearchInput.focus = false; root.moveWinCursor(0, 1) }
+              Keys.onReturnPressed: root.activateWinCursor()
+              Keys.onEnterPressed: root.activateWinCursor()
             }
 
             Button {
@@ -1671,7 +1134,7 @@ Panel {
               spacing: Style.space(8)
 
               Text {
-                visible: !root.winNewsMode
+                visible: !root.settingsMode && !root.newsMode
                 Layout.fillWidth: true
                 text: root.items.length === 0
                   ? (root.indexLoading ? "Loading armory…" : "Offline — can't reach wardogs.zone")
@@ -1687,7 +1150,7 @@ Panel {
               }
 
               GridLayout {
-                visible: !root.winNewsMode
+                visible: !root.settingsMode && !root.newsMode
                 Layout.fillWidth: true
                 Layout.bottomMargin: Style.space(2)
                 columns: root.winGridColumns
@@ -1723,7 +1186,7 @@ Panel {
               }
 
             NewsList {
-              visible: root.winNewsMode
+              visible: root.newsMode
               Layout.fillWidth: true
               items: root.news
               maxItems: root.news.length
@@ -1733,15 +1196,166 @@ Panel {
               fontFamily: root.fontFamily
               onOpenRequested: function(url) { root.openItem(url) }
             }
+
+            // ---------- settings ----------
+            ColumnLayout {
+              id: settingsSection
+              visible: root.settingsMode
+              Layout.fillWidth: true
+              spacing: Style.space(10)
+
+              SectionCard {
+                title: "Data"
+
+                ColumnLayout {
+                  width: parent.width
+                  spacing: Style.space(8)
+
+                  NumberField {
+                    id: refreshField
+                    property string settingKey: "refreshIntervalSec"
+                    label: "Refresh every (seconds)"
+                    value: Number(root.draftValue("refreshIntervalSec", 300))
+                    from: 60
+                    to: 86400
+                    stepSize: 60
+                    fieldWidth: parent.width
+                    foreground: root.fg
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    onModified: function(value) { root.setDraftValue("refreshIntervalSec", value) }
+                  }
+
+                  ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(4)
+
+                    Text {
+                      text: "Default category"
+                      color: root.dim
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                    }
+
+                    CategorySelect {
+                      focusTarget: winKeys
+                      items: root.items
+                      kinds: root.kinds
+                      activeKind: String(root.draftValue("defaultKind", "weapon"))
+                      fg: root.fg
+                      fontFamily: root.fontFamily
+                      onSetKind: function(k) { root.setDraftValue("defaultKind", k) }
+                    }
+                  }
+
+                  TextField {
+                    Layout.fillWidth: true
+                    id: filterField
+                    property string settingKey: "filterText"
+                    placeholderText: "default filter (empty = none)"
+                    text: String(root.draftValue("filterText", ""))
+                    foreground: root.fg
+                    accent: Color.accent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    onTextEdited: root.setDraftValue("filterText", filterField.text)
+                  }
+
+                  RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(8)
+
+                    Button {
+                      radius: root.cornerRadius
+                      text: "Prefetch all icons"
+                      tooltipText: "Download every item icon into the local cache"
+                      foreground: root.fg
+                      fontFamily: root.fontFamily
+                      fontSize: Style.font.caption
+                      horizontalPadding: Style.spacing.controlPaddingX
+                      verticalPadding: Style.spacing.controlPaddingY
+                      onClicked: root.prefetchAllIcons()
+                    }
+
+                    Text {
+                      Layout.fillWidth: true
+                      visible: root.iconsPending > 0
+                      text: "Fetching icons… " + root.iconsPending + " left"
+                      color: root.dim
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                    }
+                  }
+                }
+              }
+
+              SectionCard {
+                title: "Behavior"
+
+                ColumnLayout {
+                  width: parent.width
+                  spacing: Style.space(8)
+
+                  Toggle {
+                    Layout.fillWidth: true
+                    id: alwaysShowToggle
+                    label: "Always show icon"
+                    description: checked ? "Icon visible even while offline" : "Icon hidden when offline"
+                    checked: root.draftValue("alwaysShow", true) === true
+                    foreground: root.fg
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    onClicked: root.setDraftValue("alwaysShow", !checked)
+                  }
+
+                  Toggle {
+                    Layout.fillWidth: true
+                    id: notifyToggle
+                    label: "Notify on new build"
+                    description: checked ? "Popup when the WARDOGS build version changes" : "No build-change popup"
+                    checked: root.draftValue("notifyOnNewVersion", true) === true
+                    foreground: root.fg
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    onClicked: root.setDraftValue("notifyOnNewVersion", !checked)
+                  }
+
+                  Toggle {
+                    Layout.fillWidth: true
+                    id: notifyNewsToggle
+                    label: "Notify on new news"
+                    description: checked ? "Popup when Wardogs Zone publishes an article" : "No news popup"
+                    checked: root.draftValue("notifyOnNewNews", true) === true
+                    foreground: root.fg
+                    accent: Color.accent
+                    fontFamily: root.fontFamily
+                    onClicked: root.setDraftValue("notifyOnNewNews", !checked)
+                  }
+
+                  Text {
+                    visible: root.settingsStatusText !== ""
+                    Layout.fillWidth: true
+                    text: root.settingsStatusText
+                    color: root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    horizontalAlignment: Text.AlignHCenter
+                  }
+                }
+              }
+            }
           }
           }
 
           // Help pinned to the bottom of the window.
           Text {
             Layout.fillWidth: true
-            text: root.winNewsMode
-              ? "click an article to open it · r refresh · esc back"
-              : "←→ ↑↓ · jk hl select · enter open · / search · r refresh · esc close"
+            text: root.settingsMode
+              ? "j/k or ↑↓ select · enter toggle · s save · esc back"
+              : root.newsMode
+                ? "click an article to open it · r refresh · esc back"
+                : "←→ ↑↓ · jk select · enter open · / search · r refresh · h hub · s settings · esc close"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
