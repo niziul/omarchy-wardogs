@@ -2,67 +2,13 @@
   "schemaVersion": 1,
   "id": "niziul.wardogs",
   "name": "Wardogs Zone",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "niziul",
   "license": "MIT",
-  "description": "WARDOGS armory browser, live build status, and Wardogs Zone news — fed by the public wardogs.zone API.",
-  "kinds": ["bar-widget"],
+  "description": "WARDOGS armory browser, live build status, and Wardogs Zone news — fed by the public wardogs.zone API. Floating window (SUPER+SHIFT+W) and panel (SUPER+SHIFT+P); no bar widget.",
+  "kinds": ["panel"],
+  "keepLoaded": true,
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
-  },
-  "barWidget": {
-    "displayName": "Wardogs Zone",
-    "description": "Browses the wardogs.zone armory (565 items across weapons/ammo/attachments/armor/vehicles) and shows the live WARDOGS build version.",
-    "category": "Gaming",
-    "allowMultiple": false,
-    "defaults": {
-      "refreshIntervalSec": 300,
-      "alwaysShow": true,
-      "defaultKind": "weapon",
-      "filterText": "",
-        "notifyOnNewVersion": true,
-        "notifyOnNewNews": true
-      },
-    "schema": [
-      {
-        "key": "refreshIntervalSec",
-        "type": "integer",
-        "label": "Refresh interval (seconds)",
-        "min": 60,
-        "max": 86400,
-        "step": 60,
-        "defaultValue": 300
-      },
-      {
-        "key": "alwaysShow",
-        "type": "boolean",
-        "label": "Always show icon",
-        "defaultValue": true
-      },
-      {
-        "key": "defaultKind",
-        "type": "string",
-        "label": "Default category (weapon, ammo, attachment, armor, vehicle, medical, ...; empty = all)",
-        "defaultValue": "weapon"
-      },
-      {
-        "key": "filterText",
-        "type": "string",
-        "label": "Default name/caliber filter (empty = none)",
-        "defaultValue": ""
-      },
-      {
-        "key": "notifyOnNewVersion",
-        "type": "boolean",
-        "label": "Notify when the WARDOGS build version changes",
-        "defaultValue": true
-      },
-      {
-        "key": "notifyOnNewNews",
-        "type": "boolean",
-        "label": "Notify when Wardogs Zone publishes a new article",
-        "defaultValue": true
-      }
-    ]
+    "panel": "Panel.qml"
   }
 }

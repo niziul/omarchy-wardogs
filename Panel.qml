@@ -19,39 +19,13 @@ import qs.Ui
 import "Model.js" as Model
 import "components"
 
-Panel {
+Item {
   id: root
-
-  moduleName: "niziul.wardogs"
-  ipcTarget: "niziul.wardogs"
-  manageIpc: false
-
-  property var anchorItem: null
-  property var hostWidget: null
-  readonly property var barIdentity: hostWidget || root
 
   // --- state -------------------------------------------------------------
   property var items: []
   property var health: ({ ok: false, version: "", build: "", env: "" })
-  // Bar pill: glyph + short build version so the live build is visible at a
-  // glance; tooltip carries the full picture.
-  // Bare label text — the bar widget paints the emblem image separately and
-  // this text to its right (countdown while it lasts, then the build version).
-  readonly property string label: {
-    var cd = Model.releaseCountdown(root.nowMs)
-    if (cd !== "") return cd
-    return root.health.version !== "" ? Model.shortVersion(root.health.version) : ""
-  }
-  readonly property string barTooltip: {
-    var bits = ["Wardogs Zone"]
-    var cd = Model.releaseCountdown(root.nowMs)
-    if (cd !== "") bits.push(cd === "LIVE" ? "early access is live" : "early access in " + cd)
-    if (root.health.version !== "") bits.push("build " + root.health.version)
-    if (root.items.length > 0) bits.push(root.items.length + " items")
-    bits.push(root.onlineText)
-    return bits.join(" · ")
-  }
-  readonly property bool showInBar: root.setting("alwaysShow", true) === true || root.health.ok
+  property bool opened: false
   property bool settingsMode: false
   property bool newsMode: false
   property bool winNewsMode: false
@@ -61,9 +35,10 @@ Panel {
   property bool keyboardMode: true
   property int panelCursor: 0
   property int winCursor: 0
+  property var settings: ({})
   property var draftSettings: ({})
   property string settingsStatusText: ""
-  property string activeKind: ""
+  property string activeKind: "weapon"
   property string activeSub: ""
   property string searchText: ""
   property int indexRetries: 0
@@ -100,9 +75,19 @@ Panel {
   readonly property string newsCacheFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news.json"
   readonly property string newsSeenFilePath: Quickshell.env("HOME") + "/.cache/wardogs-plugin/news-seen.json"
   readonly property string notifyBin: (Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy") + "/bin/omarchy-notification-send"
-  readonly property color fg: root.bar ? root.bar.foreground : Color.foreground
+  readonly property color fg: Color.foreground
   readonly property color dim: Qt.rgba(fg.r, fg.g, fg.b, 0.62)
-  readonly property string fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+  readonly property string fontFamily: Style.font.family
+  // Settings persist here — bar-widget settings (shell.json entries) do not
+  // exist for a floating-window/panel-only plugin.
+  readonly property string settingsFile: Quickshell.env("HOME") + "/.config/wardogs-plugin/settings.json"
+  readonly property string settingsDir: settingsFile.substring(0, settingsFile.lastIndexOf("/"))
+
+  // atomicWrites needs the directory to exist before the first save.
+  Process {
+    id: settingsDirProc
+    command: ["mkdir", "-p", root.settingsDir]
+  }
   readonly property int maxStdioBytes: 524288
   // Style.cornerRadius mirrors Hyprland's decoration:rounding, which is 0 on
   // this setup. The plugin pins its own radius so button corners stay
@@ -290,11 +275,11 @@ Panel {
 
   // --- browsing actions ------------------------------------------------------
   function openItem(url) {
-    if (url) root.bar.run("xdg-open '" + String(url) + "'")
+    if (url) Quickshell.execDetached(["xdg-open", String(url)])
   }
 
   function openHub() {
-    root.bar.run("xdg-open 'https://wardogs.zone/loadouts/hub'")
+    Quickshell.execDetached(["xdg-open", "https://wardogs.zone/loadouts/hub"])
   }
 
   // Big free-floating window (middle-click on the bar pill, or IPC).
@@ -524,19 +509,11 @@ Panel {
     var next = normalizedSettings(draftSettings)
     draftSettings = next
     root.settings = next
-    // Keep the host bar widget in sync immediately (clock/F1 pattern) — it
-    // re-injects its settings on bar changes, and a stale snapshot there
-    // would clobber the just-saved values until the next shell restart.
-    if (root.hostWidget && "settings" in root.hostWidget) root.hostWidget.settings = next
-    var persisted = false
-    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
-      bar.shell.updateEntryInline(root.moduleName, next)
-      persisted = true
-    }
+    settingsStore.setText(JSON.stringify(next, null, 2) + "\n")
     // Apply immediately — the saved default is what the user expects to see.
     root.activeKind = next.defaultKind || "weapon"
     root.searchText = String(next.filterText || "")
-    settingsStatusText = persisted ? "Saved" : "Could not save"
+    settingsStatusText = "Saved"
   }
 
   // --- bar trigger ------------------------------------------------------------
@@ -547,12 +524,15 @@ Panel {
     root.searchText = String(root.setting("filterText", "") || "")
   }
 
-  onOpenedChanged: {
-    if (!opened) return
-    refresh()
-    requestVisibleIcons()
-    // Keyboard nav owns focus on open; "/" or a click moves it to search.
-    focusPanelKeys()
+  function open() { root.opened = true }
+  function close() { root.opened = false }
+  function toggle() {
+    root.opened = !root.opened
+    if (root.opened) {
+      root.refresh()
+      root.requestVisibleIcons()
+      root.focusPanelKeys()
+    }
   }
   onWinOpenChanged: requestVisibleIcons()
   onActiveKindChanged: {
@@ -673,6 +653,27 @@ Panel {
     onLoadFailed: root.onNewsSeenLoaded("{}")
   }
 
+  // Plugin-owned settings store (floating-window/panel plugins have no bar
+  // entry in shell.json to live in).
+  FileView {
+    id: settingsStore
+    path: root.settingsFile
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: {
+      var loaded = {}
+      try { loaded = JSON.parse(String(text() || "{}")) } catch (e) { loaded = {} }
+      if (!loaded || typeof loaded !== "object") loaded = {}
+      root.settings = root.normalizedSettings(loaded)
+      root.activeKind = root.setting("defaultKind", "weapon") || "weapon"
+      root.searchText = String(root.setting("filterText", "") || "")
+    }
+    onLoadFailed: {
+      root.settings = root.normalizedSettings({})
+    }
+  }
+
   // Tiny python state helper (local file only; see scripts/persist.py).
   Process {
     id: persistProc
@@ -731,8 +732,8 @@ Panel {
   }
 
   Component.onCompleted: {
-    root.activeKind = root.setting("defaultKind", "weapon")
-    root.searchText = root.setting("filterText", "")
+    settingsDirProc.running = true
+    settingsStore.reload()
     seenFile.reload()
     indexCache.reload()
     newsCache.reload()
@@ -741,17 +742,36 @@ Panel {
     root.refresh()
   }
 
-  KeyboardPanel {
-    id: panel
-    anchorItem: root.anchorItem
-    owner: root
-    bar: root.bar
-    open: root.opened
-    // Centered under the bar (F1-sessions style) instead of hugging the pill.
-    centerOnBar: true
-    focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(440))
-    contentHeight: panel.fittedContentHeight(Style.space(520))
+  // Self-hosted panel surface: floating-window/panel plugins draw their own
+  // layer window (omaland pattern). Scrim + card centered horizontally,
+  // right below the waybar.
+  PanelWindow {
+    id: panelWindow
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.namespace: "niziul-wardogs-panel"
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+
+    onVisibleChanged: {
+      if (visible) {
+        root.refresh()
+        root.requestVisibleIcons()
+        Qt.callLater(function() { if (root.opened) root.focusPanelKeys() })
+      }
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      color: Qt.rgba(0, 0, 0, 0.45)
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: root.opened = false
+      }
+    }
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -788,13 +808,33 @@ Panel {
       }
     }
 
-    ColumnLayout {
-      id: contentColumn
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.top: parent.top
-      anchors.bottom: parent.bottom
-      spacing: Style.space(12)
+    BorderSurface {
+      id: panelCard
+      // Centered horizontally, right below the waybar.
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: Math.round(Style.bar.sizeHorizontal + Style.space(14))
+      width: Math.round(Style.space(440))
+      height: Math.round(Math.min(parent.height - y - Style.space(14), Style.space(520)))
+      color: Color.popups.background
+      radius: Style.cornerRadius
+      padding: Style.space(12)
+
+      // Consume clicks on empty card areas so they don't reach the scrim.
+      MouseArea {
+        anchors.fill: parent
+      }
+
+      ColumnLayout {
+        id: contentColumn
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.topMargin: panelCard.contentTopInset
+        anchors.bottomMargin: panelCard.contentBottomInset
+        anchors.leftMargin: panelCard.contentLeftInset
+        anchors.rightMargin: panelCard.contentRightInset
+        spacing: Style.space(12)
 
       RowLayout {
         id: headerRow
@@ -1297,6 +1337,7 @@ Panel {
         horizontalAlignment: Text.AlignHCenter
       }
      }
+    }
    }
 
   // Settings-only section wrapper.
