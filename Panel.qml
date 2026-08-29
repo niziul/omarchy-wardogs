@@ -438,10 +438,6 @@ Panel {
     return next
   }
 
-  function canPersistSettings() {
-    return !!(bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
-  }
-
   function draftValue(name, fallback) {
     var value = draftSettings ? draftSettings[name] : undefined
     return value === undefined || value === null ? fallback : value
@@ -528,11 +524,19 @@ Panel {
     var next = normalizedSettings(draftSettings)
     draftSettings = next
     root.settings = next
-    if (canPersistSettings()) bar.shell.updateEntryInline(root.moduleName, next)
+    // Keep the host bar widget in sync immediately (clock/F1 pattern) — it
+    // re-injects its settings on bar changes, and a stale snapshot there
+    // would clobber the just-saved values until the next shell restart.
+    if (root.hostWidget && "settings" in root.hostWidget) root.hostWidget.settings = next
+    var persisted = false
+    if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function") {
+      bar.shell.updateEntryInline(root.moduleName, next)
+      persisted = true
+    }
     // Apply immediately — the saved default is what the user expects to see.
     root.activeKind = next.defaultKind || "weapon"
     root.searchText = String(next.filterText || "")
-    settingsStatusText = "Saved"
+    settingsStatusText = persisted ? "Saved" : "Could not save"
   }
 
   // --- bar trigger ------------------------------------------------------------
@@ -1350,6 +1354,19 @@ Panel {
         source: heroImg
         color: root.fg
       }
+    }
+  }
+
+  IpcHandler {
+    target: "niziul.wardogs.settings"
+    function save() {
+      root.openSettings()
+      root.saveSettings()
+    }
+    function setRefreshInterval(sec: int) {
+      root.openSettings()
+      root.setDraftValue("refreshIntervalSec", sec)
+      root.saveSettings()
     }
   }
 
