@@ -886,7 +886,7 @@ Panel {
         // the size and the centered position to keep borders crisp.
         anchors.centerIn: parent
         width: Math.round(Math.max(Style.space(500), sw - Style.space(80)))
-        height: Math.round(Math.max(Style.space(420), Math.min(sh * 0.7, sh - Style.space(80))))
+        height: Math.round(Math.max(Style.space(420), Math.min(sh * 0.85, sh - Style.space(80))))
         x: Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 2)
         color: Color.popups.background
