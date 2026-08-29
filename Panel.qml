@@ -747,6 +747,8 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
+    // Centered under the bar (F1-sessions style) instead of hugging the pill.
+    centerOnBar: true
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(440))
     contentHeight: panel.fittedContentHeight(Style.space(520))
