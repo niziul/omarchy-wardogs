@@ -933,7 +933,10 @@ Panel {
           // handler params by the signal's declared name, so a renamed
           // arg arrives undefined.
           onTextEdited: root.searchText = searchInput.text
-          Keys.onEscapePressed: searchInput.focus = false
+          // Blur AND hand focus back to the key catcher — otherwise the
+          // catcher stays dead and a second Esc no longer closes the panel
+          // (the window's field does exactly this with winKeys).
+          Keys.onEscapePressed: { searchInput.focus = false; keyCatcher.forceActiveFocus() }
           Keys.onUpPressed: { searchInput.focus = false; root.moveCursor("panel", 0, -1) }
           Keys.onDownPressed: { searchInput.focus = false; root.moveCursor("panel", 0, 1) }
           Keys.onReturnPressed: root.activateCursor("panel")
@@ -959,6 +962,7 @@ Panel {
         CategorySelect {
           Layout.alignment: Qt.AlignVCenter
           rowHeight: Math.round(searchInput.implicitHeight)
+          focusTarget: keyCatcher
           items: root.items
           kinds: root.kinds
           activeKind: root.activeKind
@@ -973,6 +977,7 @@ Panel {
         SubcategorySelect {
           Layout.alignment: Qt.AlignVCenter
           rowHeight: Math.round(searchInput.implicitHeight)
+          focusTarget: keyCatcher
           items: root.items
           activeKind: root.activeKind
           activeSub: root.activeSub
@@ -1155,6 +1160,7 @@ Panel {
                   }
 
                   CategorySelect {
+                    focusTarget: keyCatcher
                     items: root.items
                     kinds: root.kinds
                     activeKind: String(root.draftValue("defaultKind", "weapon"))
@@ -1621,6 +1627,7 @@ Panel {
             CategorySelect {
               Layout.alignment: Qt.AlignVCenter
               rowHeight: Math.round(winSearchInput.implicitHeight)
+              focusTarget: winKeys
               items: root.items
               kinds: root.kinds
               activeKind: root.activeKind
@@ -1635,6 +1642,7 @@ Panel {
             SubcategorySelect {
               Layout.alignment: Qt.AlignVCenter
               rowHeight: Math.round(winSearchInput.implicitHeight)
+              focusTarget: winKeys
               items: root.items
               activeKind: root.activeKind
               activeSub: root.activeSub

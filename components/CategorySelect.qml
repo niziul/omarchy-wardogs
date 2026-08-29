@@ -17,6 +17,10 @@ Item {
   // Height of the trigger box. Bind it to the neighboring TextField's height
   // so the borders line up exactly; defaults to the kit control height.
   property real rowHeight: Style.spacing.controlHeight
+  // Where keyboard focus should return when the dropdown closes. Dropdowns
+  // pull focus onto their trigger, which strands the panel's key catcher —
+  // Esc would stop working until something else refocuses it.
+  property var focusTarget: null
   signal setKind(string kind)
 
   readonly property var options: {
@@ -48,5 +52,6 @@ Item {
     foreground: root.fg
     fontFamily: root.fontFamily
     onChanged: function(v) { root.setKind(v) }
+    onPopupOpenChanged: if (!drop.popupOpen && root.focusTarget) root.focusTarget.forceActiveFocus()
   }
 }

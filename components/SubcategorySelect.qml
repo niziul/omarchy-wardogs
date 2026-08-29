@@ -15,6 +15,8 @@ Item {
   property color fg: Qt.rgba(1, 1, 1, 0.9)
   property string fontFamily: ""
   property real rowHeight: Style.spacing.controlHeight
+  // Focus returns here when the dropdown closes (see CategorySelect).
+  property var focusTarget: null
   signal setSub(string sub)
 
   readonly property var options: {
@@ -47,5 +49,6 @@ Item {
     foreground: root.fg
     fontFamily: root.fontFamily
     onChanged: function(v) { root.setSub(v) }
+    onPopupOpenChanged: if (!drop.popupOpen && root.focusTarget) root.focusTarget.forceActiveFocus()
   }
 }
