@@ -17,6 +17,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
+import "Details.js" as Details
 import "components"
 
 Panel {
@@ -72,6 +73,20 @@ Panel {
   property string newsSeenGuid: ""
   property bool newsSeenFileLoaded: false
 
+  // --- item detail ----------------------------------------------------------
+  // The site has no JSON detail API; each item's full stats are recovered by
+  // parsing its /database/{id} page (see Details.js) on demand. Fetch on
+  // selection only, with an in-memory session cache and a per-item disk cache
+  // so browsing again is instant and offline-safe.
+  property string selectedId: ""
+  property var selectedItem: null          // the committed item for the pane
+  property var detailData: null           // normalized detail object or null
+  property bool detailLoading: false
+  property bool detailError: false
+  property bool detailPaneFocus: false    // pane owns keyboard focus (Enter in)
+  property var detailCache: ({})          // id -> normalized object (session)
+  property string detailPendingId: ""     // id currently being fetched
+
   // --- item icons ----------------------------------------------------------
   // Artwork lives at https://wardogs.zone/game/icons/{id}.png. Downloaded
   // lazily (per visible category, or all at once via the settings button)
@@ -79,6 +94,7 @@ Panel {
   readonly property string iconDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/icons"
   property var cachedIcons: ({})       // icon file names already on disk
   property int iconEpoch: 0            // bumped when the cache view changes
+  readonly property string detailDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/details"
   property int cacheEpoch: 0           // bumped only when files are rewritten in place
   // Ticking clock so the release countdown in the bar label stays current.
   property real nowMs: Date.now()
@@ -390,10 +406,102 @@ Panel {
       winScroller.contentY = y + item.height - winScroller.height + Style.space(8)
   }
 
+  // Commit the current cursor item as the selected item for the detail pane.
+  // "Enter" and clicks select an item INTO the pane (a secondary key scope);
+  // the browser is then reached through the pane's button or the hub/site links.
   function activateWinCursor() {
     var i = root.winCursor
     if (i < 0 || i >= root.filtered.length) return
-    openItem(Model.itemUrl(root.filtered[i].id))
+    root.selectItem(root.filtered[i])
+  }
+
+  function selectItem(item) {
+    if (!item) return
+    root.selectedId = String(item.id || "")
+    root.selectedItem = item
+    root.detailPaneFocus = true
+    winDetail.forceActiveFocus()
+    loadDetails(item)
+  }
+
+  function loadDetails(item) {
+    var id = String(item.id || "")
+    if (id === "") return
+    if (root.detailCache[id]) { showDetail(id, root.detailCache[id], false); return }
+    if (root.detailCache[id] === false) { showDetail(id, null, true); return }
+    readDetailFromDisk(id, function(data) {
+      if (root.selectedId !== id) return
+      if (data) { storeDetail(id, data); showDetail(id, data, false) }
+      else fetchDetail(item)
+    })
+  }
+
+  // Disk-cache read: one-shot FileView reload; result delivered via callback.
+  function readDetailFromDisk(id, cb) {
+    detailCacheReader.path = detailCachePath(id)
+    detailCacheReader.onDone = cb
+    detailCacheReader.reload()
+  }
+
+  function fetchDetail(item) {
+    var id = String(item.id || "")
+    if (id === "" || root.detailPendingId === id) return
+    root.detailPendingId = id
+    root.detailLoading = true
+    root.detailError = false
+    root.detailData = null
+    detailFetchProc.command = ["curl", "-fsS", "--max-time", "12", "https://wardogs.zone/database/" + id]
+    detailFetchProc.running = true
+  }
+
+  // Record a loaded/failed detail and refresh the pane binding state.
+  function showDetail(id, data, error) {
+    if (root.selectedId !== id) return
+    root.detailData = data
+    root.detailError = error
+    root.detailLoading = false
+  }
+
+  function storeDetail(id, data) {
+    var next = cloneObject(root.detailCache, {})
+    next[id] = data
+    root.detailCache = next
+    // Persist to disk (atomic write) for later sessions.
+    detailCacheWriter.path = detailCachePath(id)
+    detailCacheWriter.setText(JSON.stringify({ fetchedAt: Date.now(), detail: data }))
+  }
+
+  function detailCachePath(id) {
+    var name = Model.sanitizeId(id)
+    return root.detailDir + "/" + (name === "" ? "unknown" : name) + ".json"
+  }
+
+  // Handler wired to detailFetchProc: parse the fetched HTML for the pending id.
+  // Any failure resolves to null (graceful fallback); the disk cache is only
+  // written on success so an earlier good copy survives site/parse breakage.
+  function onDetailFetch(id, html) {
+    if (root.detailPendingId !== id) return
+    root.detailPendingId = ""
+    var data = Details.parseDetails(html, id)
+    if (data) {
+      storeDetail(id, data)
+      if (root.selectedId === id) showDetail(id, data, false)
+      else root.detailCache[id] = data
+    } else {
+      if (root.selectedId === id) showDetail(id, null, true)
+      else { var neg = cloneObject(root.detailCache, {}); neg[id] = false; root.detailCache = neg }
+    }
+  }
+
+  // Disk cache files are {fetchedAt, detail}; surface the detail object or null.
+  function parseDetailCache(raw) {
+    try {
+      var data = JSON.parse(String(raw || "{}"))
+      var d = data && data.detail
+      return (d && d.id) ? d : null
+    } catch (e) {
+      return null
+    }
   }
 
   // --- settings ----------------------------------------------------------------
@@ -655,6 +763,50 @@ Panel {
   // Tiny python state helper (local file only; see scripts/persist.py).
   Process {
     id: persistProc
+  }
+
+  // Item-detail disk cache (per-item JSON, atomically written) — read on demand
+  // before hitting the network, written after every successful parse. Mirrors
+  // the index/news FileView pattern exactly.
+  FileView {
+    id: detailCacheReader
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    property var onDone: null
+    onLoaded: {
+      var cb = detailCacheReader.onDone
+      detailCacheReader.onDone = null
+      if (cb) cb(root.parseDetailCache(text()))
+    }
+    onLoadFailed: {
+      var cbf = detailCacheReader.onDone
+      detailCacheReader.onDone = null
+      if (cbf) cbf(null)
+    }
+  }
+
+  FileView {
+    id: detailCacheWriter
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+  }
+
+  // Fetch a single item's /database/{id} page and parse out its stat object.
+  // On success the normalized detail is cached in memory + on disk; any failure
+  // (network, parse, or an item the page does not embed) resolves to null so the
+  // pane falls back to "open in browser".
+  Process {
+    id: detailFetchProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.onDetailFetch(root.detailPendingId, root.truncateStdio(text))
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.onDetailFetch(root.detailPendingId, "")
+    }
   }
 
   // One-shot cache pass at startup: migrate any pre-normalization icons
@@ -1117,14 +1269,23 @@ Panel {
             }
           }
 
-          Flickable {
-            id: winScroller
+          // Armory grid (left) + selected-item detail pane (right). The pane is
+          // a second keyboard scope you enter with Enter/Tab, so the detail fetch
+          // only happens on an explicit selection — never while arrowing.
+          RowLayout {
+            id: winBodyRow
             Layout.fillWidth: true
             Layout.fillHeight: true
-            clip: true
-            contentWidth: width
-            contentHeight: winList.implicitHeight
-            boundsBehavior: Flickable.StopAtBounds
+            spacing: Style.space(10)
+
+            Flickable {
+              id: winScroller
+              Layout.fillWidth: true
+              Layout.fillHeight: true
+              clip: true
+              contentWidth: width
+              contentHeight: winList.implicitHeight
+              boundsBehavior: Flickable.StopAtBounds
 
             ColumnLayout {
               id: winList
@@ -1175,10 +1336,11 @@ Panel {
                     fg: root.fg
                     dim: root.dim
                     fontFamily: root.fontFamily
-                    // Clicking a tile moves the keyboard cursor with the mouse.
+                    // Clicking a tile moves the keyboard cursor with the mouse
+                    // and selects the item into the detail pane.
                     onOpenRequested: {
                       root.winCursor = index
-                      root.openItem(url)
+                      root.selectItem(modelData)
                     }
                     Layout.fillWidth: true
                   }
@@ -1345,6 +1507,25 @@ Panel {
                 }
               }
             }
+          }
+
+          DetailPanel {
+            id: winDetail
+            Layout.preferredWidth: Style.space(300)
+            Layout.fillHeight: true
+            visible: !root.settingsMode && !root.newsMode
+            item: root.selectedItem
+            detail: root.detailData
+            loading: root.detailLoading
+            error: root.detailError
+            selected: root.selectedId !== ""
+            focused: root.detailPaneFocus
+            fg: root.fg
+            dim: root.dim
+            fontFamily: root.fontFamily
+            onOpenBrowser: function(url) { root.openItem(url) }
+            onLeave: function() { root.detailPaneFocus = false; root.focusWinKeys() }
+          }
           }
           }
 
