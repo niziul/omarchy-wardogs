@@ -1432,6 +1432,13 @@ Panel {
         radius: Style.cornerRadius
         padding: Style.space(14)
 
+        // Consume clicks on empty card areas (padding, text, background).
+        // Without this they fall through the card to the scrim's
+        // close-on-click MouseArea and the window closes unexpectedly.
+        MouseArea {
+          anchors.fill: parent
+        }
+
         ColumnLayout {
           id: winCardContent
           anchors.left: parent.left
