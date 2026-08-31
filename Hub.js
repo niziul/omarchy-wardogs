@@ -28,7 +28,11 @@ function flightChunks(html) {
 }
 
 function chunkOf(html) {
-  return flightChunks(html).join("\n")
+  // Flight rows arrive at mixed escape levels: the same payload keeps real
+  // quotes in some rows and literal \" sequences in others (observed on the
+  // hub list). Collapsing escaped quotes to real ones lets every parser
+  // regex work uniformly over the joined chunk.
+  return flightChunks(html).join("\n").replace(/\\"/g, '"')
 }
 
 function firstRe(t, re) {
@@ -138,13 +142,30 @@ function parseHubList(html) {
     var next = t.indexOf("\"buildId\":\"", at + 10)
     var win = t.slice(at, next === -1 ? t.length : next)
     var wi = win.match(/"children":\["([\d.]+)"," KG · ",(\d+)/)
+    // Role: the meta row reads [author][age][role icon+name][weapon]. The
+    // role name is an array sibling after the icon svg (which differs per
+    // role), shaped `}],"Recon"]}` — the same shape as the author avatar's
+    // trailing name, so accept only known role names, scanning backwards
+    // from the weapon span.
+    var weaponAt = win.search(/"truncate text-wd-text-mute","children":"/)
+    var role = ""
+    if (weaponAt !== -1) {
+      var names = win.slice(0, weaponAt).match(/\],"([^"]{1,32})"\]\}/g) || []
+      for (var n = names.length - 1; n >= 0; n--) {
+        var cand = names[n].slice(3, -3) // strip leading `],"` and trailing `"]}`
+        if (ROLES.indexOf(cand) !== -1) {
+          role = cand
+          break
+        }
+      }
+    }
     builds.push({
       id: m[1],
       score: parseInt(m[2], 10) || 0,
       title: firstRe(win, /font-display[^"]*","children":"([^"]+)"/),
       author: firstRe(win, /"unoptimized":true\}\],"([^"]+)"\]/),
       age: firstRe(win, /"text-wd-text-mute","children":"([^"]+)"/),
-      role: firstRe(win, /"stroke":"none"\}\]\]\}\],"([^"]+)"\]\}/),
+      role: role,
       weapon: firstRe(win, /"truncate text-wd-text-mute","children":"([^"]+)"/),
       iconId: firstRe(win, /\/game\/icons\/([a-z0-9_-]+)\.png/),
       cost: unescapePrice(firstRe(win, /text-wd-cash","children":"(\$\$[\d,]+)"/)),
@@ -202,6 +223,7 @@ function filterBuilds(builds, query, role, sort) {
 if (typeof module !== "undefined") {
   module.exports = {
     flightChunks: flightChunks,
+    chunkOf: chunkOf,
     parseHubList: parseHubList,
     parseHubBuild: parseHubBuild,
     ROLES: ROLES,
