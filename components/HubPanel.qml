@@ -825,6 +825,31 @@ Item {
                                                         color: hp.fg
                                                         cached: false
                                                     }
+                                                // name chip on hover/focus — the tile shows only an icon otherwise
+                                                Rectangle {
+                                                    visible: attCell.hot && attCell.filled
+                                                    z: 50
+                                                    anchors.bottom: parent.bottom
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: -Style.space(2)
+                                                    implicitWidth: Math.min(Style.space(180), attNameText.implicitWidth + Style.space(10))
+                                                    implicitHeight: Style.space(17)
+                                                    color: Color.popups.background
+                                                    border.width: 1
+                                                    border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.3)
+
+                                                    Text {
+                                                        id: attNameText
+                                                        anchors.centerIn: parent
+                                                        width: parent.width - Style.space(8)
+                                                        text: attCell.att !== null ? attCell.att.slot.name : ""
+                                                        color: hp.fg
+                                                        font.family: hp.fontFamily
+                                                        font.pixelSize: Style.font.caption
+                                                        elide: Text.ElideRight
+                                                        horizontalAlignment: Text.AlignHCenter
+                                                    }
+                                                }
 
                                                     Rectangle {
                                                         visible: attCell.filled && hp.badgeOf !== null && hp.badgeOf(attCell.att.slot.itemId) !== ""
@@ -1484,6 +1509,31 @@ Item {
                                             color: hp.fg
                                             cached: false
                                         }
+                                            // name chip on hover/focus — the tile shows only an icon otherwise
+                                            Rectangle {
+                                                visible: boardCell.hot && boardCell.filled
+                                                z: 50
+                                                anchors.bottom: parent.bottom
+                                                anchors.left: parent.left
+                                                anchors.leftMargin: -Style.space(2)
+                                                implicitWidth: Math.min(Style.space(180), cellNameText.implicitWidth + Style.space(10))
+                                                implicitHeight: Style.space(17)
+                                                color: Color.popups.background
+                                                border.width: 1
+                                                border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.3)
+
+                                                Text {
+                                                    id: cellNameText
+                                                    anchors.centerIn: parent
+                                                    width: parent.width - Style.space(8)
+                                                    text: boardCell.slot !== null ? boardCell.slot.name : ""
+                                                    color: hp.fg
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    elide: Text.ElideRight
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                }
+                                            }
 
                                         Rectangle {
                                             visible: boardCell.filled && hp.badgeOf !== null && hp.badgeOf(boardCell.slot.itemId) !== ""
