@@ -87,24 +87,29 @@ Item {
     // cash-green for slot prices, the site's price language
     readonly property color cashColor: "#4ade80"
 
-    // Equipment slots split for the site-style layout: keyed slots
-    // (primary, specialist, ...) become the big numbered cards; unkeyed
-    // rows (weapon attachments, ammo) become the small square rail.
-    // `orig` preserves the parsed order so flat cursor/mark indices stay
-    // valid across the two visual containers.
-    function keyedRows(section) {
+    // Equipment grouping for the site layout: each keyed slot owns the
+    // unkeyed rows that follow it in parsed order (its attachments), shown
+    // in the four grid spaces beside the card — always four squares like
+    // the site, empty when the weapon has fewer. `orig` preserves the
+    // parsed order so flat cursor/mark indices stay valid.
+    function equipmentGroups(section) {
         var out = [];
+        var cur = null;
+        var orphan = [];
         for (var i = 0; i < section.rows.length; i++) {
-            if (section.rows[i].key !== "")
-                out.push({"slot": section.rows[i], "orig": i, "num": out.length + 1});
-        }
-        return out;
-    }
-    function unkeyedRows(section) {
-        var out = [];
-        for (var i = 0; i < section.rows.length; i++) {
-            if (section.rows[i].key === "")
-                out.push({"slot": section.rows[i], "orig": i});
+            var r = section.rows[i];
+            if (r.key !== "") {
+                cur = {"slot": r, "orig": i, "num": out.length + 1, "atts": []};
+                while (orphan.length > 0 && cur.atts.length < 4)
+                    cur.atts.push(orphan.shift());
+                out.push(cur);
+            } else {
+                var it = {"slot": r, "orig": i};
+                if (cur === null)
+                    orphan.push(it);
+                else if (cur.atts.length < 4)
+                    cur.atts.push(it);
+            }
         }
         return out;
     }
@@ -492,39 +497,44 @@ Item {
                                 }
                             }
 
-                            // Equipment: the site's build-page layout — big keyed
-                            // slot cards stacked left (slot number, large art,
-                            // weight chip, name/price bar) with the unkeyed
-                            // attachments/ammo as a small square rail on the right
-                            Row {
+                            // Equipment: the site's build-page layout —
+                            // each keyed slot renders as a big numbered card
+                            // with its own four grid spaces beside it, filled
+                            // from the unkeyed rows that follow it (its
+                            // attachments)
+                            Column {
                                 visible: leftSection.modelData.label === "Equipment"
                                 Layout.fillWidth: true
                                 spacing: Style.space(8)
 
-                                ColumnLayout {
-                                    width: leftCol.width - Style.space(8) - Math.round(leftCol.width * 0.16)
-                                    spacing: Style.space(8)
+                                Repeater {
+                                    model: hp.equipmentGroups(leftSection.modelData)
 
-                                    Repeater {
-                                        model: hp.keyedRows(leftSection.modelData)
+                                    delegate: Row {
+                                        id: eqRow
+                                        required property int index
+                                        required property var modelData
+                                        readonly property var slot: modelData.slot
+                                        readonly property int flat: leftSection.modelData.base + modelData.orig
+                                        readonly property bool hot: flat === hp.cursor
+                                        readonly property int tile: Style.space(71)
 
-                                        delegate: Item {
+                                        width: leftCol.width
+                                        height: Style.space(148)
+                                        spacing: Style.space(8)
+
+                                        // --- the big slot card -------------------------
+                                        Item {
                                             id: eqCard
-                                            required property int index
-                                            required property var modelData
-                                            readonly property var slot: modelData.slot
-                                            readonly property int flat: leftSection.modelData.base + modelData.orig
-                                            readonly property bool hot: flat === hp.cursor
-
-                                            Layout.fillWidth: true
-                                            implicitHeight: Style.space(148)
+                                            width: parent.width - Style.space(8) - 2 * eqRow.tile - Style.space(6)
+                                            height: parent.height
 
                                             Rectangle {
                                                 anchors.fill: parent
                                                 radius: 0
                                                 color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
                                                 border.width: 1
-                                                border.color: eqCard.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
+                                                border.color: eqRow.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
                                             }
 
                                             MouseArea {
@@ -532,15 +542,15 @@ Item {
                                                 cursorShape: Qt.PointingHandCursor
                                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                                 onClicked: function (mouse) {
-                                                    hp.hoverSlot(eqCard.flat);
+                                                    hp.hoverSlot(eqRow.flat);
                                                     if (mouse.button === Qt.RightButton)
-                                                        hp.markSlot(eqCard.flat);
+                                                        hp.markSlot(eqRow.flat);
                                                     else
-                                                        hp.openItem("https://wardogs.zone/database/" + eqCard.slot.itemId);
+                                                        hp.openItem("https://wardogs.zone/database/" + eqRow.slot.itemId);
                                                 }
                                                 hoverEnabled: true
                                                 onContainsMouseChanged: if (containsMouse)
-                                                    hp.hoverSlot(eqCard.flat)
+                                                    hp.hoverSlot(eqRow.flat)
                                             }
 
                                             // slot number, top-left
@@ -548,7 +558,7 @@ Item {
                                                 anchors.top: parent.top
                                                 anchors.left: parent.left
                                                 anchors.margins: Style.space(6)
-                                                text: "[" + eqCard.modelData.num + "]"
+                                                text: "[" + eqRow.modelData.num + "]"
                                                 color: hp.dim
                                                 font.family: hp.fontFamily
                                                 font.pixelSize: Style.font.caption
@@ -556,7 +566,7 @@ Item {
 
                                             // weight chip, top-right
                                             Rectangle {
-                                                visible: eqCard.slot.weight > 0
+                                                visible: eqRow.slot.weight > 0
                                                 anchors.top: parent.top
                                                 anchors.right: parent.right
                                                 anchors.margins: Style.space(6)
@@ -569,7 +579,7 @@ Item {
                                                 Text {
                                                     id: eqWeightText
                                                     anchors.centerIn: parent
-                                                    text: eqCard.slot.weight
+                                                    text: eqRow.slot.weight
                                                     color: hp.dim
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
@@ -578,7 +588,7 @@ Item {
 
                                             // A/B badge, beside the slot number
                                             Rectangle {
-                                                visible: hp.badgeOf !== null && hp.badgeOf(eqCard.slot.itemId) !== ""
+                                                visible: hp.badgeOf !== null && hp.badgeOf(eqRow.slot.itemId) !== ""
                                                 anchors.top: parent.top
                                                 anchors.left: parent.left
                                                 anchors.margins: Style.space(6)
@@ -591,7 +601,7 @@ Item {
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: hp.badgeOf !== null ? hp.badgeOf(eqCard.slot.itemId) : ""
+                                                    text: hp.badgeOf !== null ? hp.badgeOf(eqRow.slot.itemId) : ""
                                                     color: hp.accentColor
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
@@ -611,8 +621,8 @@ Item {
                                                     anchors.centerIn: parent
                                                     width: parent.width
                                                     height: parent.height
-                                                    visible: hp.iconUrlOf !== null && hp.iconUrlOf(eqCard.slot.itemId) !== ""
-                                                    source: hp.iconUrlOf !== null ? hp.iconUrlOf(eqCard.slot.itemId) : ""
+                                                    visible: hp.iconUrlOf !== null && hp.iconUrlOf(eqRow.slot.itemId) !== ""
+                                                    source: hp.iconUrlOf !== null ? hp.iconUrlOf(eqRow.slot.itemId) : ""
                                                     fillMode: Image.PreserveAspectFit
                                                     mipmap: true
                                                     smooth: true
@@ -628,7 +638,7 @@ Item {
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    visible: hp.iconUrlOf === null || hp.iconUrlOf(eqCard.slot.itemId) === ""
+                                                    visible: hp.iconUrlOf === null || hp.iconUrlOf(eqRow.slot.itemId) === ""
                                                     text: "\uF7C4"
                                                     color: hp.dim
                                                     font.family: hp.fontFamily
@@ -650,8 +660,8 @@ Item {
                                                     anchors.leftMargin: Style.space(8)
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     width: parent.width - eqPriceText.implicitWidth - Style.space(24)
-                                                    text: eqCard.slot.name
-                                                    color: eqCard.hot ? hp.accentColor : hp.fg
+                                                    text: eqRow.slot.name
+                                                    color: eqRow.hot ? hp.accentColor : hp.fg
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
                                                     font.bold: true
@@ -663,8 +673,8 @@ Item {
                                                     anchors.right: parent.right
                                                     anchors.rightMargin: Style.space(8)
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    visible: eqCard.slot.price !== ""
-                                                    text: eqCard.slot.price
+                                                    visible: eqRow.slot.price !== ""
+                                                    text: eqRow.slot.price
                                                     color: hp.cashColor
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
@@ -672,92 +682,91 @@ Item {
                                                 }
                                             }
                                         }
-                                    }
-                                }
 
-                                // unkeyed attachments/ammo, small square rail
-                                GridLayout {
-                                    width: Math.round(leftCol.width * 0.16)
-                                    columns: 2
-                                    columnSpacing: Style.space(6)
-                                    rowSpacing: Style.space(6)
+                                        // --- the four grid spaces (2x2) -----------------
+                                        Grid {
+                                            columns: 2
+                                            spacing: Style.space(6)
 
-                                    Repeater {
-                                        model: hp.unkeyedRows(leftSection.modelData)
+                                            Repeater {
+                                                model: 4
 
-                                        delegate: Item {
-                                            id: railTile
-                                            required property int index
-                                            required property var modelData
-                                            readonly property var slot: modelData.slot
-                                            readonly property int flat: leftSection.modelData.base + modelData.orig
-                                        readonly property bool hot: flat === hp.cursor
+                                                delegate: Item {
+                                                    id: attCell
+                                                    required property int index
+                                                    readonly property var att: index < eqRow.modelData.atts.length ? eqRow.modelData.atts[index] : null
+                                                    readonly property bool filled: att !== null
+                                                    readonly property int flat: filled ? leftSection.modelData.base + eqRow.modelData.atts[index].orig : -1
+                                                    readonly property bool hot: filled && flat === hp.cursor
 
-                                        Layout.preferredWidth: Style.space(78)
-                                        Layout.preferredHeight: Style.space(78)
+                                                    width: eqRow.tile
+                                                    height: eqRow.tile
 
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                radius: 0
-                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
-                                                border.width: 1
-                                                border.color: railTile.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
-                                            }
+                                                    Rectangle {
+                                                        anchors.fill: parent
+                                                        radius: 0
+                                                        color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, attCell.filled ? 0.04 : 0.02)
+                                                        border.width: 1
+                                                        border.color: attCell.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, attCell.filled ? 0.15 : 0.08)
+                                                    }
 
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                                onClicked: function (mouse) {
-                                                    hp.hoverSlot(railTile.flat);
-                                                    if (mouse.button === Qt.RightButton)
-                                                        hp.markSlot(railTile.flat);
-                                                    else
-                                                        hp.openItem("https://wardogs.zone/database/" + railTile.slot.itemId);
-                                                }
-                                                hoverEnabled: true
-                                                onContainsMouseChanged: if (containsMouse)
-                                                    hp.hoverSlot(railTile.flat)
-                                            }
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        enabled: attCell.filled
+                                                        cursorShape: attCell.filled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                        onClicked: function (mouse) {
+                                                            hp.hoverSlot(attCell.flat);
+                                                            if (mouse.button === Qt.RightButton)
+                                                                hp.markSlot(attCell.flat);
+                                                            else
+                                                                hp.openItem("https://wardogs.zone/database/" + attCell.att.slot.itemId);
+                                                        }
+                                                        hoverEnabled: true
+                                                        onContainsMouseChanged: if (containsMouse && attCell.filled)
+                                                            hp.hoverSlot(attCell.flat)
+                                                    }
 
-                                            Image {
-                                                id: railImg
-                                                anchors.centerIn: parent
-                                                width: parent.width - Style.space(12)
-                                                height: parent.height - Style.space(12)
-                                                visible: hp.iconUrlOf !== null && hp.iconUrlOf(railTile.slot.itemId) !== ""
-                                                source: hp.iconUrlOf !== null ? hp.iconUrlOf(railTile.slot.itemId) : ""
-                                                fillMode: Image.PreserveAspectFit
-                                                mipmap: true
-                                                smooth: true
-                                            }
+                                                    Image {
+                                                        id: attImg
+                                                        anchors.centerIn: parent
+                                                        width: parent.width - Style.space(12)
+                                                        height: parent.height - Style.space(12)
+                                                        visible: attCell.filled && hp.iconUrlOf !== null && hp.iconUrlOf(attCell.att.slot.itemId) !== ""
+                                                        source: attCell.filled && hp.iconUrlOf !== null ? hp.iconUrlOf(attCell.att.slot.itemId) : ""
+                                                        fillMode: Image.PreserveAspectFit
+                                                        mipmap: true
+                                                        smooth: true
+                                                    }
 
-                                            ColorOverlay {
-                                                anchors.fill: railImg
-                                                visible: railImg.status === Image.Ready
-                                                source: railImg
-                                                color: hp.fg
-                                                cached: false
-                                            }
+                                                    ColorOverlay {
+                                                        anchors.fill: attImg
+                                                        visible: attImg.status === Image.Ready
+                                                        source: attImg
+                                                        color: hp.fg
+                                                        cached: false
+                                                    }
 
-                                            Rectangle {
-                                                visible: hp.badgeOf !== null && hp.badgeOf(railTile.slot.itemId) !== ""
-                                                anchors.top: parent.top
-                                                anchors.left: parent.left
-                                                anchors.margins: Style.space(3)
-                                                implicitWidth: Style.space(14)
-                                                implicitHeight: Style.space(14)
-                                                color: Color.popups.background
-                                                border.width: 1
-                                                border.color: hp.accentColor
+                                                    Rectangle {
+                                                        visible: attCell.filled && hp.badgeOf !== null && hp.badgeOf(attCell.att.slot.itemId) !== ""
+                                                        anchors.top: parent.top
+                                                        anchors.left: parent.left
+                                                        anchors.margins: Style.space(3)
+                                                        implicitWidth: Style.space(14)
+                                                        implicitHeight: Style.space(14)
+                                                        color: Color.popups.background
+                                                        border.width: 1
+                                                        border.color: hp.accentColor
 
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: hp.badgeOf !== null ? hp.badgeOf(railTile.slot.itemId) : ""
-                                                    color: hp.accentColor
-                                                    font.family: hp.fontFamily
-                                                    font.pixelSize: Style.font.caption
-                                                    font.bold: true
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: attCell.filled && hp.badgeOf !== null ? hp.badgeOf(attCell.att.slot.itemId) : ""
+                                                            color: hp.accentColor
+                                                            font.family: hp.fontFamily
+                                                            font.pixelSize: Style.font.caption
+                                                            font.bold: true
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
