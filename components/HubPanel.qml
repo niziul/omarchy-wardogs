@@ -84,6 +84,31 @@ Item {
     }
     readonly property var board: build !== null && build.board ? build.board : null
 
+    // cash-green for slot prices, the site's price language
+    readonly property color cashColor: "#4ade80"
+
+    // Equipment slots split for the site-style layout: keyed slots
+    // (primary, specialist, ...) become the big numbered cards; unkeyed
+    // rows (weapon attachments, ammo) become the small square rail.
+    // `orig` preserves the parsed order so flat cursor/mark indices stay
+    // valid across the two visual containers.
+    function keyedRows(section) {
+        var out = [];
+        for (var i = 0; i < section.rows.length; i++) {
+            if (section.rows[i].key !== "")
+                out.push({"slot": section.rows[i], "orig": i, "num": out.length + 1});
+        }
+        return out;
+    }
+    function unkeyedRows(section) {
+        var out = [];
+        for (var i = 0; i < section.rows.length; i++) {
+            if (section.rows[i].key === "")
+                out.push({"slot": section.rows[i], "orig": i});
+        }
+        return out;
+    }
+
     implicitHeight: content.implicitHeight
 
     // Thin L-shaped corner marks, the site's stat-card signature.
@@ -430,8 +455,9 @@ Item {
                 Layout.fillWidth: true
                 spacing: Style.space(12)
 
-                // --- left: equipment (wide cards) + gear (grid) -------------
+                // --- left: equipment (site-style cards + rail) + gear ------
                 ColumnLayout {
+                    id: leftCol
                     width: Math.round(hp.width * 0.55)
                     spacing: Style.space(10)
 
@@ -466,9 +492,284 @@ Item {
                                 }
                             }
 
-                            GridLayout {
+                            // Equipment: the site's build-page layout — big keyed
+                            // slot cards stacked left (slot number, large art,
+                            // weight chip, name/price bar) with the unkeyed
+                            // attachments/ammo as a small square rail on the right
+                            Row {
+                                visible: leftSection.modelData.label === "Equipment"
                                 Layout.fillWidth: true
-                                columns: leftSection.modelData.label === "Equipment" ? 1 : 3
+                                spacing: Style.space(8)
+
+                                ColumnLayout {
+                                    width: leftCol.width - Style.space(8) - Math.round(leftCol.width * 0.16)
+                                    spacing: Style.space(8)
+
+                                    Repeater {
+                                        model: hp.keyedRows(leftSection.modelData)
+
+                                        delegate: Item {
+                                            id: eqCard
+                                            required property int index
+                                            required property var modelData
+                                            readonly property var slot: modelData.slot
+                                            readonly property int flat: leftSection.modelData.base + modelData.orig
+                                            readonly property bool hot: flat === hp.cursor
+
+                                            Layout.fillWidth: true
+                                            implicitHeight: Style.space(148)
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 0
+                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
+                                                border.width: 1
+                                                border.color: eqCard.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: function (mouse) {
+                                                    hp.hoverSlot(eqCard.flat);
+                                                    if (mouse.button === Qt.RightButton)
+                                                        hp.markSlot(eqCard.flat);
+                                                    else
+                                                        hp.openItem("https://wardogs.zone/database/" + eqCard.slot.itemId);
+                                                }
+                                                hoverEnabled: true
+                                                onContainsMouseChanged: if (containsMouse)
+                                                    hp.hoverSlot(eqCard.flat)
+                                            }
+
+                                            // slot number, top-left
+                                            Text {
+                                                anchors.top: parent.top
+                                                anchors.left: parent.left
+                                                anchors.margins: Style.space(6)
+                                                text: "[" + eqCard.modelData.num + "]"
+                                                color: hp.dim
+                                                font.family: hp.fontFamily
+                                                font.pixelSize: Style.font.caption
+                                            }
+
+                                            // weight chip, top-right
+                                            Rectangle {
+                                                visible: eqCard.slot.weight > 0
+                                                anchors.top: parent.top
+                                                anchors.right: parent.right
+                                                anchors.margins: Style.space(6)
+                                                implicitWidth: eqWeightText.implicitWidth + Style.space(12)
+                                                implicitHeight: Style.space(20)
+                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.08)
+                                                border.width: 1
+                                                border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.25)
+
+                                                Text {
+                                                    id: eqWeightText
+                                                    anchors.centerIn: parent
+                                                    text: eqCard.slot.weight
+                                                    color: hp.dim
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                }
+                                            }
+
+                                            // A/B badge, beside the slot number
+                                            Rectangle {
+                                                visible: hp.badgeOf !== null && hp.badgeOf(eqCard.slot.itemId) !== ""
+                                                anchors.top: parent.top
+                                                anchors.left: parent.left
+                                                anchors.margins: Style.space(6)
+                                                anchors.leftMargin: Style.space(36)
+                                                implicitWidth: Style.space(16)
+                                                implicitHeight: Style.space(16)
+                                                color: Color.popups.background
+                                                border.width: 1
+                                                border.color: hp.accentColor
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: hp.badgeOf !== null ? hp.badgeOf(eqCard.slot.itemId) : ""
+                                                    color: hp.accentColor
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                }
+                                            }
+
+                                            // art, in the space above the name bar
+                                            Item {
+                                                anchors.top: parent.top
+                                                anchors.bottom: eqBar.top
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+
+                                                Image {
+                                                    id: eqImg
+                                                    anchors.centerIn: parent
+                                                    width: parent.width
+                                                    height: parent.height
+                                                    visible: hp.iconUrlOf !== null && hp.iconUrlOf(eqCard.slot.itemId) !== ""
+                                                    source: hp.iconUrlOf !== null ? hp.iconUrlOf(eqCard.slot.itemId) : ""
+                                                    fillMode: Image.PreserveAspectFit
+                                                    mipmap: true
+                                                    smooth: true
+                                                }
+
+                                                ColorOverlay {
+                                                    anchors.fill: eqImg
+                                                    visible: eqImg.status === Image.Ready
+                                                    source: eqImg
+                                                    color: hp.fg
+                                                    cached: false
+                                                }
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    visible: hp.iconUrlOf === null || hp.iconUrlOf(eqCard.slot.itemId) === ""
+                                                    text: "\uF7C4"
+                                                    color: hp.dim
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.title
+                                                }
+                                            }
+
+                                            // name over price, bottom bar
+                                            Rectangle {
+                                                id: eqBar
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.bottom: parent.bottom
+                                                implicitHeight: Style.space(26)
+                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.07)
+
+                                                Text {
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: Style.space(8)
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    width: parent.width - eqPriceText.implicitWidth - Style.space(24)
+                                                    text: eqCard.slot.name
+                                                    color: eqCard.hot ? hp.accentColor : hp.fg
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    id: eqPriceText
+                                                    anchors.right: parent.right
+                                                    anchors.rightMargin: Style.space(8)
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    visible: eqCard.slot.price !== ""
+                                                    text: eqCard.slot.price
+                                                    color: hp.cashColor
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // unkeyed attachments/ammo, small square rail
+                                GridLayout {
+                                    width: Math.round(leftCol.width * 0.16)
+                                    columns: 2
+                                    columnSpacing: Style.space(6)
+                                    rowSpacing: Style.space(6)
+
+                                    Repeater {
+                                        model: hp.unkeyedRows(leftSection.modelData)
+
+                                        delegate: Item {
+                                            id: railTile
+                                            required property int index
+                                            required property var modelData
+                                            readonly property var slot: modelData.slot
+                                            readonly property int flat: leftSection.modelData.base + modelData.orig
+                                        readonly property bool hot: flat === hp.cursor
+
+                                        Layout.preferredWidth: Style.space(78)
+                                        Layout.preferredHeight: Style.space(78)
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 0
+                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
+                                                border.width: 1
+                                                border.color: railTile.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: function (mouse) {
+                                                    hp.hoverSlot(railTile.flat);
+                                                    if (mouse.button === Qt.RightButton)
+                                                        hp.markSlot(railTile.flat);
+                                                    else
+                                                        hp.openItem("https://wardogs.zone/database/" + railTile.slot.itemId);
+                                                }
+                                                hoverEnabled: true
+                                                onContainsMouseChanged: if (containsMouse)
+                                                    hp.hoverSlot(railTile.flat)
+                                            }
+
+                                            Image {
+                                                id: railImg
+                                                anchors.centerIn: parent
+                                                width: parent.width - Style.space(12)
+                                                height: parent.height - Style.space(12)
+                                                visible: hp.iconUrlOf !== null && hp.iconUrlOf(railTile.slot.itemId) !== ""
+                                                source: hp.iconUrlOf !== null ? hp.iconUrlOf(railTile.slot.itemId) : ""
+                                                fillMode: Image.PreserveAspectFit
+                                                mipmap: true
+                                                smooth: true
+                                            }
+
+                                            ColorOverlay {
+                                                anchors.fill: railImg
+                                                visible: railImg.status === Image.Ready
+                                                source: railImg
+                                                color: hp.fg
+                                                cached: false
+                                            }
+
+                                            Rectangle {
+                                                visible: hp.badgeOf !== null && hp.badgeOf(railTile.slot.itemId) !== ""
+                                                anchors.top: parent.top
+                                                anchors.left: parent.left
+                                                anchors.margins: Style.space(3)
+                                                implicitWidth: Style.space(14)
+                                                implicitHeight: Style.space(14)
+                                                color: Color.popups.background
+                                                border.width: 1
+                                                border.color: hp.accentColor
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: hp.badgeOf !== null ? hp.badgeOf(railTile.slot.itemId) : ""
+                                                    color: hp.accentColor
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Gear: compact three-column grid
+                            GridLayout {
+                                visible: leftSection.modelData.label === "Gear"
+                                Layout.fillWidth: true
+                                columns: 3
                                 columnSpacing: Style.space(8)
                                 rowSpacing: Style.space(8)
 
@@ -476,22 +777,21 @@ Item {
                                     model: leftSection.modelData.rows
 
                                     delegate: Item {
-                                        id: leftSlot
+                                        id: gearSlot
                                         required property int index
                                         required property var modelData
                                         readonly property int flat: leftSection.modelData.base + index
                                         readonly property bool hot: flat === hp.cursor
-                                        readonly property bool wide: leftSection.modelData.label === "Equipment"
 
                                         Layout.fillWidth: true
-                                        implicitHeight: wide ? Style.space(88) : Style.space(104)
+                                        implicitHeight: Style.space(104)
 
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: 0
                                             color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
                                             border.width: 1
-                                            border.color: leftSlot.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
+                                            border.color: gearSlot.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
                                         }
 
                                         MouseArea {
@@ -499,54 +799,33 @@ Item {
                                             cursorShape: Qt.PointingHandCursor
                                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                                             onClicked: function (mouse) {
-                                                hp.hoverSlot(leftSlot.flat);
+                                                hp.hoverSlot(gearSlot.flat);
                                                 if (mouse.button === Qt.RightButton)
-                                                    hp.markSlot(leftSlot.flat);
+                                                    hp.markSlot(gearSlot.flat);
                                                 else
-                                                    hp.openItem("https://wardogs.zone/database/" + leftSlot.modelData.itemId);
+                                                    hp.openItem("https://wardogs.zone/database/" + gearSlot.modelData.itemId);
                                             }
                                             hoverEnabled: true
                                             onContainsMouseChanged: if (containsMouse)
-                                                hp.hoverSlot(leftSlot.flat)
+                                                hp.hoverSlot(gearSlot.flat)
                                         }
 
-                                        // weight chip, top-right (gear cards)
+                                        // weight chip, top-right
                                         Rectangle {
-                                            visible: !leftSlot.wide && leftSlot.modelData.weight > 0
+                                            visible: gearSlot.modelData.weight > 0
                                             anchors.top: parent.top
                                             anchors.right: parent.right
                                             anchors.margins: Style.space(4)
-                                            implicitWidth: leftWeightText.implicitWidth + Style.space(10)
+                                            implicitWidth: gearWeightText.implicitWidth + Style.space(10)
                                             implicitHeight: Style.space(15)
                                             color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.08)
                                             border.width: 1
                                             border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.25)
 
                                             Text {
-                                                id: leftWeightText
+                                                id: gearWeightText
                                                 anchors.centerIn: parent
-                                                text: leftSlot.modelData.weight + " kg"
-                                                color: hp.dim
-                                                font.family: hp.fontFamily
-                                                font.pixelSize: Style.font.caption
-                                            }
-                                        }
-
-                                        // mag chip, top-left (equipment cards)
-                                        Rectangle {
-                                            visible: leftSlot.wide && leftSlot.modelData.mag > 0
-                                            anchors.top: parent.top
-                                            anchors.left: parent.left
-                                            anchors.margins: Style.space(6)
-                                            implicitWidth: Style.space(26)
-                                            implicitHeight: Style.space(16)
-                                            color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.08)
-                                            border.width: 1
-                                            border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.25)
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: "[" + leftSlot.modelData.mag + "]"
+                                                text: gearSlot.modelData.weight + " kg"
                                                 color: hp.dim
                                                 font.family: hp.fontFamily
                                                 font.pixelSize: Style.font.caption
@@ -555,11 +834,10 @@ Item {
 
                                         // A/B badge
                                         Rectangle {
-                                            visible: hp.badgeOf !== null && hp.badgeOf(leftSlot.modelData.itemId) !== ""
+                                            visible: hp.badgeOf !== null && hp.badgeOf(gearSlot.modelData.itemId) !== ""
                                             anchors.top: parent.top
                                             anchors.left: parent.left
                                             anchors.margins: Style.space(4)
-                                            anchors.leftMargin: leftSlot.wide && leftSlot.modelData.mag > 0 ? Style.space(38) : Style.space(4)
                                             implicitWidth: Style.space(16)
                                             implicitHeight: Style.space(16)
                                             color: Color.popups.background
@@ -568,7 +846,7 @@ Item {
 
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: hp.badgeOf !== null ? hp.badgeOf(leftSlot.modelData.itemId) : ""
+                                                text: hp.badgeOf !== null ? hp.badgeOf(gearSlot.modelData.itemId) : ""
                                                 color: hp.accentColor
                                                 font.family: hp.fontFamily
                                                 font.pixelSize: Style.font.caption
@@ -586,28 +864,28 @@ Item {
                                                 Layout.fillHeight: true
 
                                                 Image {
-                                                    id: leftImg
+                                                    id: gearImg
                                                     anchors.centerIn: parent
                                                     width: parent.width
                                                     height: parent.height
-                                                    visible: hp.iconUrlOf !== null && hp.iconUrlOf(leftSlot.modelData.itemId) !== ""
-                                                    source: hp.iconUrlOf !== null ? hp.iconUrlOf(leftSlot.modelData.itemId) : ""
+                                                    visible: hp.iconUrlOf !== null && hp.iconUrlOf(gearSlot.modelData.itemId) !== ""
+                                                    source: hp.iconUrlOf !== null ? hp.iconUrlOf(gearSlot.modelData.itemId) : ""
                                                     fillMode: Image.PreserveAspectFit
                                                     mipmap: true
                                                     smooth: true
                                                 }
 
                                                 ColorOverlay {
-                                                    anchors.fill: leftImg
-                                                    visible: leftImg.status === Image.Ready
-                                                    source: leftImg
+                                                    anchors.fill: gearImg
+                                                    visible: gearImg.status === Image.Ready
+                                                    source: gearImg
                                                     color: hp.fg
                                                     cached: false
                                                 }
 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    visible: hp.iconUrlOf === null || hp.iconUrlOf(leftSlot.modelData.itemId) === ""
+                                                    visible: hp.iconUrlOf === null || hp.iconUrlOf(gearSlot.modelData.itemId) === ""
                                                     text: "\uF7C4"
                                                     color: hp.dim
                                                     font.family: hp.fontFamily
@@ -621,17 +899,17 @@ Item {
 
                                                 Text {
                                                     Layout.fillWidth: true
-                                                    text: leftSlot.modelData.name
-                                                    color: leftSlot.hot ? hp.accentColor : hp.fg
+                                                    text: gearSlot.modelData.name
+                                                    color: gearSlot.hot ? hp.accentColor : hp.fg
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
-                                                    font.bold: leftSlot.hot
+                                                    font.bold: gearSlot.hot
                                                     elide: Text.ElideRight
                                                 }
 
                                                 Text {
-                                                    text: leftSlot.modelData.price
-                                                    color: hp.accentColor
+                                                    text: gearSlot.modelData.price
+                                                    color: hp.cashColor
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
                                                     font.bold: true
@@ -821,7 +1099,7 @@ Item {
 
                                                 Text {
                                                     text: rightSlot.modelData.price
-                                                    color: hp.accentColor
+                                                    color: hp.cashColor
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
                                                     font.bold: true
