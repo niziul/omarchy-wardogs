@@ -36,6 +36,21 @@ Item {
     signal hoverCard(int index)
     signal hoverSlot(int index)
 
+    // The delegate currently highlighted through the cursor, recorded by
+    // the focusable delegates as they become hot. revealCursor() maps it
+    // into the scroller's coordinate space and reports it upward — the
+    // keyboard handler calls it after stepping so the selection scrolls
+    // into view (hover never triggers the scroll).
+    property var hotItem: null
+    property var scrollContent: null
+    signal reveal(int y, int height)
+    function revealCursor() {
+        if (hp.hotItem === null || hp.scrollContent === null)
+            return;
+        var pt = hp.hotItem.mapToItem(hp.scrollContent, 0, 0);
+        hp.reveal(Math.max(0, pt.y), hp.hotItem.height);
+    }
+
     readonly property color accentColor: Color.accent
 
     // Detail sections in flat cursor order: Equipment → Gear → Storage
@@ -240,6 +255,8 @@ Item {
                     required property int index
                     required property var modelData
                     readonly property bool hot: index === hp.cursor
+                    onHotChanged: if (hot)
+                        hp.hotItem = card
 
                     Layout.fillWidth: true
                     implicitHeight: Style.space(58)
@@ -549,6 +566,8 @@ Item {
                                         readonly property int flat: leftSection.modelData.base + modelData.orig
                                         readonly property bool hot: flat === hp.cursor
                                         readonly property int tile: Style.space(71)
+                                        onHotChanged: if (hot)
+                                            hp.hotItem = eqRow
 
                                         width: leftCol.width
                                         height: Style.space(148)
@@ -730,6 +749,8 @@ Item {
                                                     readonly property bool filled: att !== null
                                                     readonly property int flat: filled ? leftSection.modelData.base + eqRow.modelData.atts[index].orig : -1
                                                     readonly property bool hot: filled && flat === hp.cursor
+                                                    onHotChanged: if (hot)
+                                                        hp.hotItem = attCell
 
                                                     width: eqRow.tile
                                                     height: eqRow.tile
@@ -823,6 +844,8 @@ Item {
                                         required property var modelData
                                         readonly property int flat: leftSection.modelData.base + index
                                         readonly property bool hot: flat === hp.cursor
+                                        onHotChanged: if (hot)
+                                            hp.hotItem = gearSlot
 
                                         Layout.fillWidth: true
                                         implicitHeight: Style.space(104)
@@ -1015,6 +1038,8 @@ Item {
                                         required property var modelData
                                         readonly property int flat: rightSection.modelData.base + index
                                         readonly property bool hot: flat === hp.cursor
+                                        onHotChanged: if (hot)
+                                            hp.hotItem = rightSlot
 
                                         Layout.fillWidth: true
                                         implicitHeight: Style.space(104)
@@ -1212,7 +1237,10 @@ Item {
                                             required property int index
                                             readonly property var slot: index < hp.boardSlots.length ? hp.boardSlots[index] : null
                                             readonly property bool filled: slot !== null
-                                            property bool hot: false
+                                            property bool mouseHot: false
+                                            readonly property bool hot: mouseHot || hp.boardBase + boardCell.index === hp.cursor
+                                            onHotChanged: if (hot)
+                                                hp.hotItem = boardCell
 
                                             Layout.preferredWidth: Style.space(46)
                                             Layout.preferredHeight: Style.space(46)
@@ -1237,7 +1265,7 @@ Item {
                                                         hp.openItem("https://wardogs.zone/database/" + boardCell.slot.itemId);
                                                 }
                                                 hoverEnabled: true
-                                                onContainsMouseChanged: boardCell.hot = containsMouse
+                                                onContainsMouseChanged: boardCell.mouseHot = containsMouse
                                             }
 
                                             Image {

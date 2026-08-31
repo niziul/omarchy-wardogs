@@ -906,6 +906,7 @@ Panel {
         } else {
             root.hubSlotCursor = clamp(root.hubSlotCursor + d, 0, Math.max(0, hubRows() - 1));
         }
+        hubPanel.revealCursor();
     }
 
     function hubActivate() {
@@ -2324,7 +2325,15 @@ Panel {
 
                             // ---------- loadout hub ----------
                             HubPanel {
+                                id: hubPanel
                                 visible: root.hubMode
+                                scrollContent: winScroller.contentItem
+                                onReveal: function (y, height) {
+                                    if (y < winScroller.contentY + Style.space(4))
+                                        winScroller.contentY = Math.max(0, y - Style.space(36));
+                                    else if (y + height > winScroller.contentY + winScroller.height - Style.space(4))
+                                        winScroller.contentY = y + height - winScroller.height + Style.space(8);
+                                }
                                 Layout.fillWidth: true
                                 listMode: root.hubBuildId === ""
                                 builds: root.hubFiltered
