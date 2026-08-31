@@ -131,6 +131,11 @@ test("filterBuilds filters by role and sorts top/hot", function () {
   for (var i = 1; i < top.length; i++) {
     assert.ok((top[i - 1].score || 0) >= (top[i].score || 0), "top order broken at " + i);
   }
+  // new: strictly non-decreasing age across the list
+  var fresh = H.filterBuilds(builds, "", "", "new");
+  for (var j = 1; j < fresh.length; j++) {
+    assert.ok(H.ageDays(fresh[j - 1].age) <= H.ageDays(fresh[j].age), "new order broken at " + j);
+  }
   // hot: a same-day build with any score outranks an older one at 0
   var hot = H.filterBuilds(builds, "", "", "hot");
   assert.strictEqual(hot[0].age, "1d");

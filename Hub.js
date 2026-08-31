@@ -171,8 +171,8 @@ function ageDays(age) {
 
 // Filter + sort for the hub list. query matches title/author/weapon/role
 // case-insensitively; role "" means all; sort "" keeps the site's order,
-// "top" is by score, "hot" blends score with recency so a fresh build
-// outranks an old upvoted one.
+// "top" is by score, "new" is newest first, "hot" blends score with
+// recency so a fresh build outranks an old upvoted one.
 function filterBuilds(builds, query, role, sort) {
   var q = String(query || "").toLowerCase()
   var out = []
@@ -187,6 +187,8 @@ function filterBuilds(builds, query, role, sort) {
   }
   if (sort === "top") {
     out.sort(function (a, b) { return (b.score || 0) - (a.score || 0) })
+  } else if (sort === "new") {
+    out.sort(function (a, b) { return ageDays(a.age) - ageDays(b.age) })
   } else if (sort === "hot") {
     out.sort(function (a, b) {
       var ha = ((a.score || 0) + 1) / Math.max(ageDays(a.age), 0.5)

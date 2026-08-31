@@ -112,6 +112,19 @@ Item {
                 }
 
                 Button {
+                    text: "New"
+                    tooltipText: "Newest published first"
+                    radius: Style.space(3)
+                    active: hp.sortMode === "new"
+                    foreground: hp.fg
+                    fontFamily: hp.fontFamily
+                    fontSize: Style.font.caption
+                    horizontalPadding: Style.space(8)
+                    verticalPadding: Style.space(2)
+                    onClicked: hp.sortMode = "new"
+                }
+
+                Button {
                     text: "Top"
                     tooltipText: "Highest scored first"
                     radius: Style.space(3)
