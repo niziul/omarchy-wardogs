@@ -338,25 +338,6 @@ Item {
                 spacing: Style.space(2)
 
                 Text {
-                    text: "—  LOADOUT HUB"
-                    color: hp.accentColor
-                    font.family: hp.fontFamily
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
-                    font.letterSpacing: 2
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    text: hp.build ? String(hp.build.title) : ""
-                    color: hp.fg
-                    font.family: hp.fontFamily
-                    font.pixelSize: Style.font.title
-                    font.bold: true
-                    elide: Text.ElideRight
-                }
-
-                Text {
                     Layout.fillWidth: true
                     visible: hp.build && hp.build.description !== ""
                     text: hp.build ? String(hp.build.description) : ""

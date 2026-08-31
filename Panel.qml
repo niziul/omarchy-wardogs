@@ -155,7 +155,7 @@ Panel {
     readonly property int iconsPending: root.iconQueue.length + (root.iconFetchingId !== "" ? 1 : 0)
 
     // Icon-forward grid: tiles per row for the overlay window.
-    readonly property int winGridColumns: 5
+    readonly property int winGridColumns: 6
 
     // --- derived & theming ---------------------------------------------------
     readonly property string stateFile: Quickshell.env("HOME") + "/.cache/wardogs-plugin/seen.json"
@@ -1728,6 +1728,8 @@ Panel {
                     root.openSettings();
                 else if (event.text === "n" || event.text === "N")
                     root.openNews();
+                else if (event.text === "b" || event.text === "B")
+                    root.openHub();
                 else if (event.text === "/") {
                     winSearchInput.forceActiveFocus();
                     winSearchInput.cursorPosition = winSearchInput.text.length;
@@ -1821,6 +1823,7 @@ Panel {
                             // The toolbar expands to the right of the hero badge on hover/focus.
                             Button {
                                 radius: root.cornerRadius
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
                                 text: "\uF021"
                                 tooltipText: "Refresh"
                                 foreground: root.fg
@@ -1833,7 +1836,7 @@ Panel {
 
                         Button {
                             id: hubButton
-                            visible: !root.settingsMode && !root.newsMode && !root.compareMode
+                            visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
                             radius: root.cornerRadius
                             tooltipText: "Open loadout hub"
                             foreground: root.fg
@@ -1855,7 +1858,7 @@ Panel {
 
                         Button {
                             id: newsButton
-                            visible: !root.settingsMode && !root.newsMode && !root.compareMode
+                            visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
                             radius: root.cornerRadius
                             tooltipText: "News feed"
                             foreground: root.fg
@@ -1876,7 +1879,7 @@ Panel {
                         }
 
                             Button {
-                                visible: !root.settingsMode && !root.newsMode && !root.compareMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
                                 radius: root.cornerRadius
                                 text: "\uF013"
                                 tooltipText: "Open settings"
@@ -1903,7 +1906,7 @@ Panel {
                             }
 
                             Button {
-                                visible: root.settingsMode || root.newsMode || root.compareMode
+                                visible: root.settingsMode || root.newsMode || root.compareMode || root.hubMode
                                 radius: root.cornerRadius
                                 text: "Back"
                                 tooltipText: "Back to armory"
@@ -2252,6 +2255,13 @@ Panel {
                                         required property int index
                                         selected: root.keyboardMode && index === root.winCursor
                                         name: modelData.name
+                                        typeText: modelData.type
+                                        caliberText: modelData.caliber
+                                        // price shows once the item's stats are cached (prefetch or compare)
+                                        price: {
+                                            var d = root.compareCache[modelData.id];
+                                            return d && d.price !== undefined ? Compare.formatPrice(d.price) : "";
+                                        }
                                         iconSource: root.iconFileUrl(modelData.id)
                                         url: Model.itemUrl(modelData.id)
                                         fg: root.fg
