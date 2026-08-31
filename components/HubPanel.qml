@@ -7,9 +7,9 @@ import "../Hub.js" as Hub
 
 // Loadout hub view: list of published builds, or one build's equipment
 // sheet styled after the wardogs.zone build page — header block, summary
-// stat cards with corner brackets, and a two-column slot body (wide
-// equipment cards left; gear cards, storage cards and the bracket-framed
-// storage board right). Pure presentation: the already-filtered data,
+// stat cards with corner brackets, and a two-column slot body (site-style
+// equipment cards with attachment grids left; gear + storage cards right).
+// Pure presentation: the already-filtered data,
 // cursor and loading/error come in as properties; the parent owns
 // keyboard routing and the pinned search/filter bar.
 Item {
@@ -55,8 +55,8 @@ Item {
 
     // Detail sections in flat cursor order: Equipment → Gear → Storage
     // (the storage group also carries the Traversal slots — parachute,
-    // bandages, throwables — exactly like the site, and they fill the
-    // storage board cells below). `base` is the section's first flat row.
+    // bandages, throwables — exactly like the site). `base` is the
+    // section's first flat row.
     readonly property var sections: {
         if (!hp.build)
             return [];
@@ -85,17 +85,6 @@ Item {
     readonly property var rightSections: hp.sections.filter(function (s) {
         return s.label === "Storage";
     })
-
-    // Storage board: the backpack contents are the Traversal slots (not
-    // rendered as cards — the board owns them), filling the parsed cols×rows
-    // frame row-major (exact positions/stack counts are client-computed on
-    // the site and not in the payload). The flat base is the sum of the
-    // card sections since Traversal is last in the parsed order.
-    readonly property var boardSlots: build !== null ? build.slots.filter(function (s) {
-        return s.section === "Traversal";
-    }) : []
-    readonly property int boardBase: build !== null ? build.slots.length - boardSlots.length : 0
-    readonly property var board: build !== null && build.board ? build.board : null
 
     // cash-green for slot prices, the site's price language
     readonly property color cashColor: "#4ade80"
@@ -985,7 +974,7 @@ Item {
                     }
                 }
 
-                // --- right: storage cards + the bracket-framed board --------
+                // --- right: storage cards (incl. traversal) ----------------
                 ColumnLayout {
                     width: Math.round(hp.width * 0.45) - Style.space(12)
                     spacing: Style.space(10)
@@ -1176,148 +1165,12 @@ Item {
                         }
                     }
 
-                    // storage board: bracket-framed grid box, cells filled
-                    // row-major from the traversal slots (exact positions and
-                    // stack counts are client-computed on the site)
-                    ColumnLayout {
-                        visible: hp.board !== null
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Style.space(6)
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: "STORAGE BOARD"
-                                color: hp.fg
-                                font.family: hp.fontFamily
-                                font.pixelSize: Style.font.caption
-                                font.bold: true
-                                font.letterSpacing: 1
-                            }
-
-                            Text {
-                                text: hp.board !== null ? hp.board.cols + "×" + hp.board.rows : ""
-                                color: hp.dim
-                                font.family: hp.fontFamily
-                                font.pixelSize: Style.font.caption
-                            }
-                        }
-
-                        Item {
-                            Layout.fillWidth: true
-                            implicitHeight: boardGrid.height + Style.space(24)
-
-                            Item {
-                                id: boardWrap
-                                anchors.centerIn: parent
-                                width: boardGrid.width + Style.space(2)
-                                height: boardGrid.height + Style.space(2)
-
-                                CornerBrackets {
-                                    mark: hp.accentColor
-                                }
-
-                                GridLayout {
-                                    id: boardGrid
-                                    anchors.centerIn: parent
-                                    columns: hp.board !== null ? hp.board.cols : 3
-                                    columnSpacing: Style.space(3)
-                                    rowSpacing: Style.space(3)
-
-                                    Repeater {
-                                        model: hp.board !== null ? hp.board.cols * hp.board.rows : 0
-
-                                        delegate: Item {
-                                            id: boardCell
-                                            required property int index
-                                            readonly property var slot: index < hp.boardSlots.length ? hp.boardSlots[index] : null
-                                            readonly property bool filled: slot !== null
-                                            property bool mouseHot: false
-                                            readonly property bool hot: mouseHot || hp.boardBase + boardCell.index === hp.cursor
-                                            onHotChanged: if (hot)
-                                                hp.hotItem = boardCell
-
-                                            Layout.preferredWidth: Style.space(46)
-                                            Layout.preferredHeight: Style.space(46)
-
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                radius: 0
-                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, boardCell.filled ? (boardCell.hot ? 0.09 : 0.05) : 0.02)
-                                                border.width: 1
-                                                border.color: boardCell.hot && boardCell.filled ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, boardCell.filled ? 0.3 : 0.12)
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                enabled: boardCell.filled
-                                                cursorShape: boardCell.filled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                                onClicked: function (mouse) {
-                                                    if (mouse.button === Qt.RightButton)
-                                                        hp.markSlot(hp.boardBase + boardCell.index);
-                                                    else
-                                                        hp.openItem("https://wardogs.zone/database/" + boardCell.slot.itemId);
-                                                }
-                                                hoverEnabled: true
-                                                onContainsMouseChanged: boardCell.mouseHot = containsMouse
-                                            }
-
-                                            Image {
-                                                id: cellImg
-                                                anchors.centerIn: parent
-                                                width: parent.width - Style.space(10)
-                                                height: parent.height - Style.space(10)
-                                                visible: boardCell.filled && hp.iconUrlOf !== null && hp.iconUrlOf(boardCell.slot.itemId) !== ""
-                                                source: boardCell.filled && hp.iconUrlOf !== null ? hp.iconUrlOf(boardCell.slot.itemId) : ""
-                                                fillMode: Image.PreserveAspectFit
-                                                mipmap: true
-                                                smooth: true
-                                            }
-
-                                            ColorOverlay {
-                                                anchors.fill: cellImg
-                                                visible: cellImg.status === Image.Ready
-                                                source: cellImg
-                                                color: hp.fg
-                                                cached: false
-                                            }
-
-                                            Rectangle {
-                                                visible: boardCell.filled && hp.badgeOf !== null && hp.badgeOf(boardCell.slot.itemId) !== ""
-                                                anchors.top: parent.top
-                                                anchors.left: parent.left
-                                                anchors.margins: Style.space(3)
-                                                implicitWidth: Style.space(14)
-                                                implicitHeight: Style.space(14)
-                                                color: Color.popups.background
-                                                border.width: 1
-                                                border.color: hp.accentColor
-
-                                                Text {
-                                                    anchors.centerIn: parent
-                                                    text: boardCell.filled && hp.badgeOf !== null ? hp.badgeOf(boardCell.slot.itemId) : ""
-                                                    color: hp.accentColor
-                                                    font.family: hp.fontFamily
-                                                    font.pixelSize: Style.font.caption
-                                                    font.bold: true
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
             Text {
                 Layout.fillWidth: true
-                visible: hp.build !== null && hp.sections.length === 0 && hp.boardSlots.length === 0
+                visible: hp.build !== null && hp.sections.length === 0
                 text: "No slots on this build."
                 color: hp.dim
                 font.family: hp.fontFamily

@@ -840,6 +840,9 @@ Panel {
         if (hit) {
             root.hubBuild = hit;
             requestHubSlotIcons(hit);
+            // stale-while-revalidate: the cache may predate a republish, so
+            // refresh in the background — the sheet stays up either way
+            refreshHubBuild(id);
             return;
         }
         root.hubBuild = null;
@@ -989,9 +992,6 @@ Panel {
                 fetchHubListNetwork();
             }
         } else {
-            // self-heal caches written before a schema addition (e.g. board)
-            if (parsed && parsed.board === undefined)
-                parsed = null;
             if (parsed) {
                 applyHubBuild(target, parsed);
             } else {
@@ -1015,6 +1015,15 @@ Panel {
 
     function fetchHubBuildNetwork(id) {
         hubFetch("https://wardogs.zone/loadouts/hub/" + id);
+    }
+
+    function refreshHubBuild(id) {
+        // one live fetch is routed at a time (hubNetTarget); if one is in
+        // flight this open keeps the cache and the next open revalidates
+        if (root.hubNetTarget !== "")
+            return;
+        root.hubNetTarget = id;
+        fetchHubBuildNetwork(id);
     }
 
     function onHubListHtml(raw) {
@@ -1052,7 +1061,7 @@ Panel {
             hubCacheView.setText(JSON.stringify(build));
             applyHubBuild(id, build);
             root.hubError = "";
-        } else {
+        } else if (root.hubBuild === null || root.hubBuildId !== id) {
             root.hubError = "Could not load this build — open it on the site instead.";
         }
     }
@@ -1401,23 +1410,40 @@ Panel {
     // ColorOverlay tint always yields full theme-foreground contrast (idempotent
     // — re-running on already-whitened files is a no-op), then learn which files
     // are on disk so they render instantly without touching the network.
+    function learnIconNames(text) {
+        var names = {};
+        var lines = String(text || "").split("\n");
+        for (var i = 0; i < lines.length; i++) {
+            var n = lines[i].replace(/^\s+|\s+$/g, "");
+            if (n !== "")
+                names[n] = true;
+        }
+        root.cachedIcons = names;
+        root.iconEpoch = root.iconEpoch + 1;
+        root.cacheEpoch = root.cacheEpoch + 1;
+    }
+
+    // fast pass: learn what is on disk immediately so cached icons render
+    // without waiting for the (much slower) mogrify migration below
     Process {
-        id: iconScanProc
-        command: ["sh", "-c", "mkdir -p \"$1\"; mogrify -trim +repage -alpha set -background none -gravity center -channel RGB -fill white -colorize 100% -resize '192x192>' -extent 192x192 \"$1\"/*.png 2>/dev/null || true; ls -1 \"$1\" || true", "sh", root.iconDir]
+        id: iconListProc
+        running: true
+        command: ["sh", "-c", "mkdir -p \"$1\"; ls -1 \"$1\" || true", "sh", root.iconDir]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                var names = {};
-                var lines = String(text || "").split("\n");
-                for (var i = 0; i < lines.length; i++) {
-                    var n = lines[i].replace(/^\s+|\s+$/g, "");
-                    if (n !== "")
-                        names[n] = true;
-                }
-                root.cachedIcons = names;
-                root.iconEpoch = root.iconEpoch + 1;
-                root.cacheEpoch = root.cacheEpoch + 1;
-            }
+            onStreamFinished: learnIconNames(text)
+        }
+    }
+
+    // slow pass: migrate any pre-normalization icons onto the uniform 96x96
+    // square and whiten them (idempotent), then re-learn
+    Process {
+        id: iconScanProc
+        running: true
+        command: ["sh", "-c", "mogrify -trim +repage -alpha set -background none -gravity center -channel RGB -fill white -colorize 100% -resize '192x192>' -extent 192x192 \"$1\"/*.png 2>/dev/null || true; ls -1 \"$1\" || true", "sh", root.iconDir]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: learnIconNames(text)
         }
     }
 
@@ -1598,7 +1624,7 @@ Panel {
             var b = root.hubBuild;
             var counts = {};
             if (b && b.slots) b.slots.forEach(function (s) { counts[s.section] = (counts[s.section] || 0) + 1; });
-            console.log("[hubdbg] build", b === null ? "null" : "obj", "| board", JSON.stringify(b ? b.board : "-"), "| slotSections", JSON.stringify(counts));
+            console.log("[hubdbg] build", b === null ? "null" : "obj", "| slotSections", JSON.stringify(counts));
             return "ok";
         }
         function scroll() {
