@@ -122,6 +122,11 @@ Panel {
     property var hubDetailCache: ({})      // id -> parsed build (memory, last-good)
     property string hubReadTarget: ""      // "list" | build id whose disk read is in flight
     readonly property string hubDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/hub"
+    property string hubQuery: ""           // pinned search field
+    property string hubRole: ""            // pinned role chip ("" = all)
+    property string hubSort: "hot"         // pinned sort chip: hot | new | top
+    readonly property var hubFiltered: Hub.filterBuilds(root.hubBuilds, root.hubQuery, root.hubRole, root.hubSort)
+    readonly property var hubRoleOptions: Hub.hubRoles()
 
     // --- stats prefetch (settings) ------------------------------------------
     // Downloads the compare page for every catalog item in id pairs so the
@@ -867,7 +872,7 @@ Panel {
     // hubPanel.filteredBuilds rather than the raw hubBuilds.
     function hubMove(d) {
         if (root.hubBuildId === "") {
-            var n = hubPanel.filteredBuilds.length;
+            var n = root.hubFiltered.length;
             if (n === 0)
                 return;
             root.hubCursor = clamp(root.hubCursor + d, 0, n - 1);
@@ -878,7 +883,7 @@ Panel {
 
     function hubActivate() {
         if (root.hubBuildId === "") {
-            var list = hubPanel.filteredBuilds;
+            var list = root.hubFiltered;
             if (root.hubCursor < list.length)
                 openHubBuild(list[root.hubCursor].id);
         } else if (root.hubSlotCursor < hubRows()) {
@@ -1621,8 +1626,8 @@ Panel {
                     else if (event.text === "v" || event.text === "V")
                         root.openCompare();
                     else if (event.text === "/" && root.hubBuildId === "") {
-                        hubPanel.searchField.forceActiveFocus();
-                        hubPanel.searchField.cursorPosition = hubPanel.searchField.text.length;
+                        hubSearchInput.forceActiveFocus();
+                        hubSearchInput.cursorPosition = hubSearchInput.text.length;
                     }
                     return;
                 } else if (root.compareMode) {
@@ -1944,6 +1949,125 @@ Panel {
                         }
                     }
 
+                    // Pinned hub search + filters: lives outside the
+                    // scroller so it stays on screen while the build list
+                    // scrolls beneath it.
+                    RowLayout {
+                        visible: root.hubMode && root.hubBuildId === ""
+                        Layout.fillWidth: true
+                        spacing: Style.space(6)
+
+                        TextField {
+                            id: hubSearchInput
+                            Layout.fillWidth: true
+                            placeholderText: "Search builds by name, author, weapon…"
+                            foreground: root.fg
+                            accent: Color.accent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            text: root.hubQuery
+                            onTextEdited: root.hubQuery = hubSearchInput.text
+                            Keys.onEscapePressed: {
+                                root.hubQuery = "";
+                                hubSearchInput.text = "";
+                                winKeys.forceActiveFocus();
+                            }
+                            Keys.onUpPressed: {
+                                hubSearchInput.focus = false;
+                                root.hubMove(-1);
+                            }
+                            Keys.onDownPressed: {
+                                hubSearchInput.focus = false;
+                                root.hubMove(1);
+                            }
+                            Keys.onReturnPressed: {
+                                hubSearchInput.focus = false;
+                                root.hubActivate();
+                            }
+                            Keys.onEnterPressed: {
+                                hubSearchInput.focus = false;
+                                root.hubActivate();
+                            }
+                        }
+
+                        Button {
+                            text: "Hot"
+                            tooltipText: "Score blended with recency"
+                            radius: root.cornerRadius
+                            active: root.hubSort === "hot"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: root.hubSort = "hot"
+                        }
+
+                        Button {
+                            text: "New"
+                            tooltipText: "Newest published first"
+                            radius: root.cornerRadius
+                            active: root.hubSort === "new"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: root.hubSort = "new"
+                        }
+
+                        Button {
+                            text: "Top"
+                            tooltipText: "Highest scored first"
+                            radius: root.cornerRadius
+                            active: root.hubSort === "top"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: root.hubSort = "top"
+                        }
+
+                        Button {
+                            text: "All"
+                            tooltipText: "Every role"
+                            radius: root.cornerRadius
+                            active: root.hubRole === ""
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: root.hubRole = ""
+                        }
+
+                        Repeater {
+                            model: root.hubRoleOptions
+
+                            delegate: Button {
+                                required property string modelData
+                                text: modelData
+                                tooltipText: modelData + " builds"
+                                radius: root.cornerRadius
+                                active: root.hubRole.toLowerCase() === modelData.toLowerCase()
+                                foreground: root.fg
+                                fontFamily: root.fontFamily
+                                fontSize: Style.font.caption
+                                horizontalPadding: Style.space(8)
+                                verticalPadding: Style.space(2)
+                                onClicked: root.hubRole = modelData
+                            }
+                        }
+
+                        Text {
+                            text: root.hubFiltered.length + " / " + root.hubBuilds.length + " builds"
+                            color: root.dim
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                        }
+                    }
+
                     Flickable {
                         id: winScroller
                         Layout.fillWidth: true
@@ -2100,11 +2224,10 @@ Panel {
 
                             // ---------- loadout hub ----------
                             HubPanel {
-                                id: hubPanel
                                 visible: root.hubMode
                                 Layout.fillWidth: true
                                 listMode: root.hubBuildId === ""
-                                builds: root.hubBuilds
+                                builds: root.hubFiltered
                                 build: root.hubBuild
                                 cursor: root.hubBuildId === "" ? root.hubCursor : root.hubSlotCursor
                                 loading: root.hubLoading
@@ -2113,7 +2236,6 @@ Panel {
                                 dim: root.dim
                                 fontFamily: root.fontFamily
                                 iconUrlOf: root.iconFileUrl
-                                focusTarget: winKeys
                                 onOpenBuild: function (id) {
                                     openHubBuild(id);
                                 }

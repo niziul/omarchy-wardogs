@@ -3,19 +3,17 @@ import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import qs.Commons
 import qs.Ui
-import "../Hub.js" as Hub
 
 // Loadout hub view: list of published builds, or one build's equipment
-// slots. Pure presentation — data, cursor and loading/error come in as
-// properties; the parent owns keyboard routing (cursor moves, enter, c to
-// mark a slot into the compare sheet, esc/v back). The list embeds its own
-// search + hot/top/role filters; `filteredBuilds` is what the cursor and
-// openBuild refer to.
+// slots. Pure presentation — the already-filtered data, cursor and
+// loading/error come in as properties; the parent owns keyboard routing
+// (cursor moves, enter, c to mark a slot into the compare sheet, esc/v
+// back) and the pinned search/filter bar above this panel.
 Item {
     id: hp
 
     property bool listMode: true
-    property var builds: []
+    property var builds: []             // filtered list rows
     property var build: null            // parsed detail or null (detail mode)
     property int cursor: 0
     property bool loading: false
@@ -24,26 +22,11 @@ Item {
     property color dim: Qt.rgba(1, 1, 1, 0.62)
     property string fontFamily: ""
     property var iconUrlOf: null        // function(id) -> cached icon url or ""
-    property var focusTarget: null      // where keyboard focus returns on esc from search
-    property alias searchField: hubSearch
     signal openBuild(string id)
     signal openItem(string url)
     signal markSlot(int index)
 
-    // Filter state (list-local).
-    property string query: ""
-    property string roleFilter: ""
-    property string sortMode: "hot"
-
     readonly property color accentColor: Color.accent
-    readonly property var filteredBuilds: Hub.filterBuilds(hp.builds, hp.query, hp.roleFilter, hp.sortMode)
-    readonly property var roleOptions: Hub.hubRoles()
-
-    onFilteredBuildsChanged: {
-        if (hp.cursor >= hp.filteredBuilds.length)
-            hp.cursor = Math.max(0, hp.filteredBuilds.length - 1);
-    }
-
     readonly property var sections: {
         if (!hp.build)
             return [];
@@ -70,124 +53,10 @@ Item {
         anchors.right: parent.right
         spacing: Style.space(8)
 
-        // --- list filter bar ------------------------------------------------
-        ColumnLayout {
-            visible: hp.listMode
-            Layout.fillWidth: true
-            spacing: Style.space(6)
-
-            TextField {
-                id: hubSearch
-                Layout.fillWidth: true
-                placeholderText: "Search builds by name, author, weapon…"
-                foreground: hp.fg
-                accent: hp.accentColor
-                font.family: hp.fontFamily
-                font.pixelSize: Style.font.caption
-                text: hp.query
-                onTextEdited: hp.query = hubSearch.text
-                Keys.onEscapePressed: {
-                    hp.query = "";
-                    hubSearch.text = "";
-                    if (hp.focusTarget)
-                        hp.focusTarget.forceActiveFocus();
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.space(4)
-
-                Button {
-                    text: "Hot"
-                    tooltipText: "Score blended with recency"
-                    radius: Style.space(3)
-                    active: hp.sortMode === "hot"
-                    foreground: hp.fg
-                    fontFamily: hp.fontFamily
-                    fontSize: Style.font.caption
-                    horizontalPadding: Style.space(8)
-                    verticalPadding: Style.space(2)
-                    onClicked: hp.sortMode = "hot"
-                }
-
-                Button {
-                    text: "New"
-                    tooltipText: "Newest published first"
-                    radius: Style.space(3)
-                    active: hp.sortMode === "new"
-                    foreground: hp.fg
-                    fontFamily: hp.fontFamily
-                    fontSize: Style.font.caption
-                    horizontalPadding: Style.space(8)
-                    verticalPadding: Style.space(2)
-                    onClicked: hp.sortMode = "new"
-                }
-
-                Button {
-                    text: "Top"
-                    tooltipText: "Highest scored first"
-                    radius: Style.space(3)
-                    active: hp.sortMode === "top"
-                    foreground: hp.fg
-                    fontFamily: hp.fontFamily
-                    fontSize: Style.font.caption
-                    horizontalPadding: Style.space(8)
-                    verticalPadding: Style.space(2)
-                    onClicked: hp.sortMode = "top"
-                }
-
-                Item {
-                    Layout.preferredWidth: Style.space(6)
-                }
-
-                Repeater {
-                    model: ["All"].concat(hp.roleOptions)
-
-                    delegate: Button {
-                        required property string modelData
-                        readonly property bool isAll: modelData === "All"
-                        readonly property bool selected: isAll ? hp.roleFilter === "" : hp.roleFilter.toLowerCase() === modelData.toLowerCase()
-
-                        text: modelData
-                        radius: Style.space(3)
-                        active: selected
-                        foreground: hp.fg
-                        fontFamily: hp.fontFamily
-                        fontSize: Style.font.caption
-                        horizontalPadding: Style.space(8)
-                        verticalPadding: Style.space(2)
-                        onClicked: hp.roleFilter = isAll ? "" : modelData
-                    }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                Text {
-                    text: hp.filteredBuilds.length + " / " + hp.builds.length + " builds"
-                    color: hp.dim
-                    font.family: hp.fontFamily
-                    font.pixelSize: Style.font.caption
-                }
-            }
-        }
-
         Text {
             visible: hp.listMode && hp.builds.length === 0
             Layout.fillWidth: true
-            text: hp.loading ? "Loading hub…" : (hp.error !== "" ? hp.error : "No builds published yet.")
-            color: hp.dim
-            font.family: hp.fontFamily
-            font.pixelSize: Style.font.caption
-            horizontalAlignment: Text.AlignHCenter
-        }
-
-        Text {
-            visible: hp.listMode && hp.builds.length > 0 && hp.filteredBuilds.length === 0
-            Layout.fillWidth: true
-            text: "No builds match."
+            text: hp.loading ? "Loading hub…" : (hp.error !== "" ? hp.error : "No builds match.")
             color: hp.dim
             font.family: hp.fontFamily
             font.pixelSize: Style.font.caption
@@ -201,7 +70,7 @@ Item {
             spacing: Style.space(4)
 
             Repeater {
-                model: hp.filteredBuilds
+                model: hp.builds
 
                 delegate: Item {
                     id: card
