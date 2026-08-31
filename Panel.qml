@@ -2326,7 +2326,6 @@ Panel {
                                 dim: root.dim
                                 fontFamily: root.fontFamily
                                 iconUrlOf: root.iconFileUrl
-                                scroller: winScroller
                                 badgeOf: function (id) {
                                     return root.compareA && root.compareA.id === id ? "A" : root.compareB && root.compareB.id === id ? "B" : "";
                                 }

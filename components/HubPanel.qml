@@ -26,7 +26,6 @@ Item {
     property string fontFamily: ""
     property var iconUrlOf: null        // function(id) -> cached icon url or ""
     property var badgeOf: null          // function(id) -> "A" | "B" | "" compare marker
-    property var scroller: null         // parent Flickable, for cursor-follow scrolling
     signal openBuild(string id)
     signal openItem(string url)
     signal markSlot(int index)
@@ -84,27 +83,6 @@ Item {
         return n;
     }
     readonly property var board: build !== null && build.board ? build.board : null
-
-    // Delegate registry for cursor-follow scrolling: "c"+index for build
-    // cards, "s"+flatIndex for detail slot cards.
-    property var rowItems: ({})
-    property string rowKey: (listMode ? "c" : "s") + cursor
-
-    onCursorChanged: ensureCursorVisible()
-    onRowKeyChanged: ensureCursorVisible()
-
-    function ensureCursorVisible() {
-        if (scroller === null)
-            return;
-        var item = rowItems[rowKey];
-        if (item === undefined || item === null)
-            return;
-        var y = item.mapToItem(scroller.contentItem, 0, 0).y;
-        if (y < scroller.contentY + Style.space(4))
-            scroller.contentY = Math.max(0, y - Style.space(36));
-        else if (y + item.height > scroller.contentY + scroller.height - Style.space(4))
-            scroller.contentY = y + item.height - scroller.height + Style.space(8);
-    }
 
     implicitHeight: content.implicitHeight
 
@@ -204,8 +182,6 @@ Item {
 
                     Layout.fillWidth: true
                     implicitHeight: Style.space(58)
-                    Component.onCompleted: hp.rowItems["c" + index] = card
-                    Component.onDestruction: delete hp.rowItems["c" + index]
 
                     Rectangle {
                         anchors.fill: parent
@@ -528,8 +504,6 @@ Item {
 
                                         Layout.fillWidth: true
                                         implicitHeight: wide ? Style.space(88) : Style.space(104)
-                                        Component.onCompleted: hp.rowItems["s" + flat] = leftSlot
-                                        Component.onDestruction: delete hp.rowItems["s" + flat]
 
                                         Rectangle {
                                             anchors.fill: parent
@@ -744,8 +718,6 @@ Item {
 
                                         Layout.fillWidth: true
                                         implicitHeight: Style.space(104)
-                                        Component.onCompleted: hp.rowItems["s" + flat] = rightSlot
-                                        Component.onDestruction: delete hp.rowItems["s" + flat]
 
                                         Rectangle {
                                             anchors.fill: parent
