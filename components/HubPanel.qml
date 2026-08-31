@@ -87,28 +87,59 @@ Item {
     // cash-green for slot prices, the site's price language
     readonly property color cashColor: "#4ade80"
 
-    // Equipment grouping for the site layout: each keyed slot owns the
-    // unkeyed rows that follow it in parsed order (its attachments), shown
-    // in the four grid spaces beside the card — always four squares like
-    // the site, empty when the weapon has fewer. `orig` preserves the
-    // parsed order so flat cursor/mark indices stay valid.
+    // Equipment grouping for the site layout: keyed slots render as big
+    // numbered cards in canonical order (primary, sidearm, specialist),
+    // and canonical slots the build leaves empty synthesize a skeleton
+    // card (no itemId, not clickable) so the slot grid always shows.
+    // Unkeyed rows following a keyed slot attach to it as its grid-space
+    // attachments. `orig` preserves the parsed row order (skeletons use
+    // -1) so flat cursor/mark indices stay valid.
     function equipmentGroups(section) {
-        var out = [];
+        var groups = {};
+        var order = [];
         var cur = null;
         var orphan = [];
         for (var i = 0; i < section.rows.length; i++) {
             var r = section.rows[i];
             if (r.key !== "") {
-                cur = {"slot": r, "orig": i, "num": out.length + 1, "atts": []};
+                cur = {"slot": r, "orig": i, "atts": []};
                 while (orphan.length > 0 && cur.atts.length < 4)
                     cur.atts.push(orphan.shift());
-                out.push(cur);
+                groups[r.key] = cur;
+                order.push(r.key);
             } else {
                 var it = {"slot": r, "orig": i};
                 if (cur === null)
                     orphan.push(it);
                 else if (cur.atts.length < 4)
                     cur.atts.push(it);
+            }
+        }
+        var keys = ["primary", "sidearm", "specialist"];
+        for (var k = 0; k < order.length; k++)
+            if (keys.indexOf(order[k]) === -1)
+                keys.push(order[k]);
+        var out = [];
+        for (var j = 0; j < keys.length; j++) {
+            var key = keys[j];
+            if (groups[key]) {
+                groups[key].num = out.length + 1;
+                out.push(groups[key]);
+            } else {
+                out.push({
+                    "slot": {
+                        "key": key,
+                        "section": "Equipment",
+                        "itemId": "",
+                        "name": key.toUpperCase(),
+                        "mag": 0,
+                        "weight": 0,
+                        "price": ""
+                    },
+                    "orig": -1,
+                    "num": out.length + 1,
+                    "atts": []
+                });
             }
         }
         return out;
@@ -539,7 +570,8 @@ Item {
 
                                             MouseArea {
                                                 anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
+                                                enabled: eqRow.slot.itemId !== ""
+                                                cursorShape: eqRow.slot.itemId !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
                                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                                 onClicked: function (mouse) {
                                                     hp.hoverSlot(eqRow.flat);
@@ -661,7 +693,7 @@ Item {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     width: parent.width - eqPriceText.implicitWidth - Style.space(24)
                                                     text: eqRow.slot.name
-                                                    color: eqRow.hot ? hp.accentColor : hp.fg
+                                                    color: eqRow.slot.itemId === "" ? hp.dim : (eqRow.hot ? hp.accentColor : hp.fg)
                                                     font.family: hp.fontFamily
                                                     font.pixelSize: Style.font.caption
                                                     font.bold: true
