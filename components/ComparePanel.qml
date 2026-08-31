@@ -253,7 +253,17 @@ Item {
     }
 
     Text {
-      visible: cp.sheetRows.length === 0
+      visible: cp.leftItem === null && cp.rightItem === null
+      Layout.fillWidth: true
+      text: "Mark two items with c, then press v to compare them here."
+      color: cp.dim
+      font.family: cp.fontFamily
+      font.pixelSize: Style.font.caption
+      horizontalAlignment: Text.AlignHCenter
+    }
+
+    Text {
+      visible: cp.sheetRows.length === 0 && cp.leftItem !== null && cp.rightItem !== null
       Layout.fillWidth: true
       text: "No comparable stats for this pair."
       color: cp.dim
@@ -320,7 +330,7 @@ Item {
 
       Text {
         Layout.fillWidth: true
-        visible: colHead.item && !colHead.loading && !colHead.error
+        visible: colHead.item !== null && !colHead.loading && !colHead.error
         text: {
           if (!colHead.item)
             return "";
@@ -344,8 +354,8 @@ Item {
 
       Text {
         Layout.fillWidth: true
-        visible: colHead.item && (colHead.loading || colHead.error)
-        text: colHead.loading ? "Loading stats…" : "No stats available"
+        visible: colHead.item === null || colHead.loading || colHead.error
+        text: colHead.item === null ? "mark with c" : colHead.loading ? "Loading stats…" : "No stats available"
         color: colHead.dim
         font.family: colHead.fontFamily
         font.pixelSize: Style.font.caption

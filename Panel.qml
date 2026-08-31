@@ -91,20 +91,23 @@ Panel {
     // Marking happens from the browse grid with `c`; `v` (or the header button)
     // opens the compare view. Details are cached in-memory for the session and
     // on disk per item so re-comparing is instant and offline-safe.
-    property var compareA: null            // first marked filtered row
-    property var compareB: null            // second marked filtered row
+    property var compareA: null            // first marked row {id,name,...}
+    property var compareB: null            // second marked row
     property bool compareMode: false       // compare view is the visible body
-    property var compareDetailA: null      // normalized detail or null
-    property var compareDetailB: null
-    property bool compareLoadingA: false
-    property bool compareLoadingB: false
-    property bool compareErrorA: false
-    property bool compareErrorB: false
-    property var compareCache: ({})        // id -> normalized detail | false (failed)
-    property string compareFetchSlot: ""   // "A" | "B" whose disk cache read is in flight
+    property var compareCache: ({})        // id -> normalized detail | false (failed once)
     property string compareFetchId: ""     // id being read from the disk cache
-    property var compareFetchQueue: []     // [{slot,id}] cache reads waiting their turn
-    property var compareNetQueue: []       // [{slot,id}] disk misses awaiting the one pair fetch
+    property var compareFetchQueue: []     // [id] disk reads waiting their turn
+    property var compareNetQueue: []       // [id] disk misses awaiting a pair fetch
+    property var compareInFlight: []       // [id] ids in the live pair fetch
+
+    // Slots are pointers into compareCache; load/error state derives from
+    // the cache so swaps and re-marks can never orphan an in-flight fetch.
+    function compareDetailOf(row) {
+        if (!row)
+            return null;
+        var d = root.compareCache[String(row.id)];
+        return d && d !== false ? d : null;
+    }
 
     // --- loadout hub ----------------------------------------------------------
     // Published builds from wardogs.zone/loadouts/hub: list + per-build
@@ -620,141 +623,112 @@ Panel {
         markCompareRow(root.filtered[i]);
     }
 
-    // Generic toggle for any row shaped {id, name} — the browse grid and the
-    // hub's slot rows both feed the same compare slots.
+    // Generic toggle for any row shaped {id, name} — the browse grid, the
+    // hub's slot cards and build cards all feed the same compare slots.
+    // The third mark replaces A. Details live in compareCache keyed by id;
+    // slots only point at them.
     function markCompareRow(row) {
         if (!row || String(row.id || "") === "")
             return;
         if (root.compareA && root.compareA.id === row.id) {
             root.compareA = null;
-            root.compareDetailA = null;
-            root.compareErrorA = false;
-            root.compareLoadingA = false;
+            console.log("[compare] unmark A", row.id);
             return;
         }
         if (root.compareB && root.compareB.id === row.id) {
             root.compareB = null;
-            root.compareDetailB = null;
-            root.compareErrorB = false;
-            root.compareLoadingB = false;
+            console.log("[compare] unmark B", row.id);
             return;
         }
         if (root.compareA === null) {
             root.compareA = row;
+            console.log("[compare] mark A", row.id);
         } else if (root.compareB === null) {
             root.compareB = row;
+            console.log("[compare] mark B", row.id);
         } else {
             root.compareA = row;
-            root.compareDetailA = null;
-            root.compareErrorA = false;
-            root.compareLoadingA = false;
+            console.log("[compare] replace A", row.id);
         }
     }
 
-    // Opens the compare sheet even with an incomplete marking so the guide
-    // (empty slot) teaches the flow instead of v doing nothing silently.
     function openCompare() {
         root.compareMode = true;
         root.settingsMode = false;
         root.newsMode = false;
         root.hubMode = false;
-        requestCompareDetail("A", root.compareA);
-        requestCompareDetail("B", root.compareB);
+        ensureCompareDetail(root.compareA);
+        ensureCompareDetail(root.compareB);
         focusWinKeys();
     }
 
-    // Mirror the whole sheet: rows, details, and per-side load/error states.
+    // Swapping the pointers swaps the whole sheet — details and load state
+    // derive per id, so an in-flight fetch lands on the right side however
+    // the slots are shuffled mid-load.
     function swapCompare() {
-        var ra = root.compareA;
+        var a = root.compareA;
         root.compareA = root.compareB;
-        root.compareB = ra;
-        var da = root.compareDetailA;
-        root.compareDetailA = root.compareDetailB;
-        root.compareDetailB = da;
-        var la = root.compareLoadingA;
-        root.compareLoadingA = root.compareLoadingB;
-        root.compareLoadingB = la;
-        var ea = root.compareErrorA;
-        root.compareErrorA = root.compareErrorB;
-        root.compareErrorB = ea;
+        root.compareB = a;
     }
 
-    // Detail resolution order per slot: in-memory session cache, then the
-    // on-disk cache (details/{id}.json), then ONE live fetch of the site's
-    // own compare page (/database/compare?items=a,b), which server-renders
-    // the full stat blobs for both ids — every kind, vehicles included (the
-    // per-item /database pages embed stats only for weapon-family items).
-    // Disk reads run one at a time; whatever misses them queues for the
-    // single pair fetch.
-    function setCompareLoading(slot, loading) {
-        if (slot === "A") {
-            root.compareLoadingA = loading;
-            root.compareErrorA = false;
-        } else {
-            root.compareLoadingB = loading;
-            root.compareErrorB = false;
-        }
+    // Is this id anywhere in the resolution pipeline?
+    function comparePending(id) {
+        if (root.compareFetchId === id)
+            return true;
+        var i;
+        for (i = 0; i < root.compareFetchQueue.length; i++)
+            if (root.compareFetchQueue[i] === id)
+                return true;
+        for (i = 0; i < root.compareNetQueue.length; i++)
+            if (root.compareNetQueue[i] === id)
+                return true;
+        for (i = 0; i < root.compareInFlight.length; i++)
+            if (root.compareInFlight[i] === id)
+                return true;
+        return false;
     }
 
-    function applyCompareDetail(slot, detail) {
-        if (slot === "A") {
-            root.compareDetailA = detail;
-            root.compareLoadingA = false;
-            root.compareErrorA = detail === null;
-        } else {
-            root.compareDetailB = detail;
-            root.compareLoadingB = false;
-            root.compareErrorB = detail === null;
-        }
-    }
-
-    function requestCompareDetail(slot, row) {
+    // Make sure the row's detail resolves eventually: memory/disk caches,
+    // then the pair fetch. A failed resolve (false) clears on every open so
+    // a transient site/network failure retries instead of sticking for the
+    // whole session.
+    function ensureCompareDetail(row) {
         if (!row)
             return;
         var id = String(row.id || "");
-        if (id === "") {
-            applyCompareDetail(slot, null);
+        if (id === "")
             return;
+        if (root.compareCache[id] === false) {
+            var cache = cloneObject(root.compareCache, {});
+            delete cache[id];
+            root.compareCache = cache;
         }
-        var hit = root.compareCache[id];
-        if (hit !== undefined) {
-            applyCompareDetail(slot, hit === false ? null : hit);
+        if (root.compareCache[id] !== undefined)
             return;
-        }
-        setCompareLoading(slot, true);
-        root.compareFetchQueue = root.compareFetchQueue.concat([{
-                    "slot": slot,
-                    "id": id
-                }]);
+        if (comparePending(id))
+            return;
+        root.compareFetchQueue = root.compareFetchQueue.concat([id]);
         kickCompareCacheRead();
     }
 
     function kickCompareCacheRead() {
-        if (root.compareFetchSlot !== "" || root.compareFetchQueue.length === 0)
+        if (root.compareFetchId !== "" || root.compareFetchQueue.length === 0)
             return;
-        var next = root.compareFetchQueue[0];
+        var id = root.compareFetchQueue[0];
         root.compareFetchQueue = root.compareFetchQueue.slice(1);
-        root.compareFetchSlot = next.slot;
-        root.compareFetchId = next.id;
-        detailCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", root.detailCachePath(next.id)];
+        root.compareFetchId = id;
+        detailCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", root.detailCachePath(id)];
         detailCacheReadProc.running = true;
     }
 
-    // Commit a resolved detail for a slot. Data arriving for an id the user
-    // has since un- or re-marked is cached but not applied.
-    function finishCompareDetail(slot, id, detail) {
+    function commitCompareDetail(id, detail) {
         var cache = cloneObject(root.compareCache, {});
         cache[id] = detail || false;
         root.compareCache = cache;
-        var cur = slot === "A" ? root.compareA : root.compareB;
-        if (cur && cur.id === id)
-            applyCompareDetail(slot, detail);
     }
 
-    // Advance the resolution pipeline after a disk read completes: next cache
-    // read first, and once none are pending, the batched pair fetch.
+    // Pipeline: next disk read, and once none are pending, the pair fetch.
     function advanceCompareFetch() {
-        root.compareFetchSlot = "";
         root.compareFetchId = "";
         if (root.compareFetchQueue.length > 0) {
             kickCompareCacheRead();
@@ -763,25 +737,23 @@ Panel {
         kickCompareNet();
     }
 
+    // The site's compare endpoint renders two stat blobs per request —
+    // batch misses two ids at a time (the shape proven to render both).
     function kickCompareNet() {
-        if (root.compareNetQueue.length === 0 || detailFetchProc.running)
+        if (root.compareInFlight.length > 0 || root.compareNetQueue.length === 0 || detailFetchProc.running)
             return;
-        var ids = root.compareNetQueue.map(function (e) {
-            return e.id;
-        });
-        // sh -c arg order: $0=sh $1=url $2=cache dir (mkdir first — the
-        // FileView write below needs the directory to exist).
-        detailFetchProc.command = ["sh", "-c", "mkdir -p \"$2\"; curl -fsS --max-time 8 \"$1\"", "sh", Model.compareUrl(ids), root.detailCacheDir];
+        var batch = root.compareNetQueue.slice(0, 2);
+        root.compareNetQueue = root.compareNetQueue.slice(batch.length);
+        root.compareInFlight = batch;
+        detailFetchProc.command = ["sh", "-c", "mkdir -p \"$2\"; curl -fsS --max-time 8 \"$1\"", "sh", Model.compareUrl(batch), root.detailCacheDir];
         detailFetchProc.running = true;
     }
 
-    // Disk-cache read: empty output (missing file) or a JSON body whose id
-    // doesn't match the pending read counts as a miss and queues for the
-    // pair fetch.
+    // Disk-cache read: a body whose id matches counts as a hit; anything
+    // else queues for the pair fetch.
     function onCompareCacheRaw(raw) {
-        var slot = root.compareFetchSlot;
         var id = root.compareFetchId;
-        if (slot === "" || id === "")
+        if (id === "")
             return;
         var detail = null;
         try {
@@ -792,30 +764,29 @@ Panel {
             detail = null;
         }
         if (detail) {
-            finishCompareDetail(slot, id, detail);
-        } else {
-            root.compareNetQueue = root.compareNetQueue.concat([{
-                        "slot": slot,
-                        "id": id
-                    }]);
+            commitCompareDetail(id, detail);
+        } else if (root.compareNetQueue.indexOf(id) === -1 && root.compareInFlight.indexOf(id) === -1) {
+            root.compareNetQueue = root.compareNetQueue.concat([id]);
         }
         advanceCompareFetch();
     }
 
     function onCompareDetailHtml(raw) {
-        var pending = root.compareNetQueue;
-        root.compareNetQueue = [];
+        var batch = root.compareInFlight;
+        root.compareInFlight = [];
         var capped = String(raw || "");
         if (capped.length > root.maxDetailBytes)
             capped = capped.substring(0, root.maxDetailBytes);
-        for (var i = 0; i < pending.length; i++) {
-            var detail = Details.parseDetails(capped, pending[i].id);
+        for (var i = 0; i < batch.length; i++) {
+            var id = batch[i];
+            var detail = capped === "" ? null : Details.parseDetails(capped, id);
             if (detail) {
-                detailCacheView.path = root.detailCachePath(pending[i].id);
+                detailCacheView.path = root.detailCachePath(id);
                 detailCacheView.setText(JSON.stringify(detail));
             }
-            finishCompareDetail(pending[i].slot, pending[i].id, detail);
+            commitCompareDetail(id, detail);
         }
+        kickCompareNet();
     }
 
     // --- loadout hub ----------------------------------------------------------
@@ -950,9 +921,19 @@ Panel {
     }
 
     function markHubSlot() {
-        if (root.hubBuildId === "" || root.hubSlotCursor >= hubRows())
+        markHubSlotAt(root.hubSlotCursor);
+    }
+
+    // Raw-index marking so mouse paths (parachute card, grid cells) can mark
+    // traversal slots the keyboard cursor never reaches.
+    function markHubSlotAt(index) {
+        if (root.hubBuildId === "" || root.hubBuild === null)
             return;
-        var slot = root.hubBuild.slots[root.hubSlotCursor];
+        if (index < 0 || index >= root.hubBuild.slots.length)
+            return;
+        var slot = root.hubBuild.slots[index];
+        if (String(slot.itemId) === "")
+            return;
         markCompareRow({
             "id": slot.itemId,
             "name": slot.name
@@ -2394,17 +2375,19 @@ Panel {
                             }
 
                             ComparePanel {
-                                visible: root.compareMode && root.compareA !== null && root.compareB !== null
+                                visible: root.compareMode
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: Math.max(Style.space(300), winScroller.height - Style.space(50))
                                 leftItem: root.compareA
                                 rightItem: root.compareB
-                                leftDetail: root.compareDetailA
-                                rightDetail: root.compareDetailB
-                                leftLoading: root.compareLoadingA
-                                rightLoading: root.compareLoadingB
-                                leftError: root.compareErrorA
-                                rightError: root.compareErrorB
+                                leftDetail: root.compareDetailOf(root.compareA)
+                                rightDetail: root.compareDetailOf(root.compareB)
+                                // per-side state derives from the cache: no
+                                // entry yet = loading, false = failed resolve
+                                leftLoading: root.compareA !== null && root.compareCache[root.compareA.id] === undefined
+                                rightLoading: root.compareB !== null && root.compareCache[root.compareB.id] === undefined
+                                leftError: root.compareA !== null && root.compareCache[root.compareA.id] === false
+                                rightError: root.compareB !== null && root.compareCache[root.compareB.id] === false
                                 fg: root.fg
                                 dim: root.dim
                                 fontFamily: root.fontFamily
@@ -2449,8 +2432,7 @@ Panel {
                                     root.openItem(url);
                                 }
                                 onMarkSlot: function (index) {
-                                    root.hubSlotCursor = index;
-                                    root.markHubSlot();
+                                    root.markHubSlotAt(index);
                                 }
                                 onMarkBuild: function (index) {
                                     root.hubCursor = index;
