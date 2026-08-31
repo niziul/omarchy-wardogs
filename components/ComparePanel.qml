@@ -173,9 +173,11 @@ Item {
             readonly property string leftVal: isHeader ? "" : Compare.valueText(cp.leftDetail, field)
             readonly property string rightVal: isHeader ? "" : Compare.valueText(cp.rightDetail, field)
             readonly property string better: isHeader ? "" : Compare.betterSide(field, cp.leftDetail, cp.rightDetail)
-            // Chevron on the winning value makes the verdict scannable without
-            // relying on color alone (color-blind friendly).
-            readonly property string winMark: "\uF077 "
+            // Direction-aware winner arrow: up when the better number is the
+            // higher one, down when lower wins (e.g. price) — the arrow always
+            // points the way the winning value actually goes, and marks the
+            // verdict without relying on color alone (color-blind friendly).
+            readonly property string winMark: field !== null && field.higherIsBetter ? "\uF077 " : "\uF078 "
 
             Layout.fillWidth: true
             Layout.topMargin: isHeader ? Style.space(8) : 0
