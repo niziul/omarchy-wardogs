@@ -1612,6 +1612,9 @@ Panel {
 
     IpcHandler {
         target: "niziul.wardogs.settings"
+        function open() {
+            root.openSettings();
+        }
         function save() {
             root.openSettings();
             root.saveSettings();
@@ -1620,6 +1623,60 @@ Panel {
             root.openSettings();
             root.setDraftValue("refreshIntervalSec", sec);
             root.saveSettings();
+        }
+    }
+
+    // One target per panel so scripts can drive the plugin directly:
+    // omarchy-shell niziul.wardogs.<panel> <method> [args]
+    IpcHandler {
+        target: "niziul.wardogs.armory"
+        function open() {
+            root.showMain();
+        }
+    }
+
+    IpcHandler {
+        target: "niziul.wardogs.news"
+        function open() {
+            root.openNews();
+        }
+    }
+
+    IpcHandler {
+        target: "niziul.wardogs.compare"
+        function open() {
+            root.open();
+            root.openCompare();
+        }
+        function mark() {
+            // mark the armory item under the keyboard cursor
+            root.markCompare();
+        }
+        function swap() {
+            root.swapCompare();
+        }
+        function clear() {
+            root.compareA = null;
+            root.compareB = null;
+        }
+    }
+
+    IpcHandler {
+        target: "niziul.wardogs.hub"
+        function open() {
+            root.open();
+            root.openHub();
+        }
+        function openBuild(id: string) {
+            if (id === "")
+                return;
+            root.open();
+            root.openHub();
+            root.openHubBuild(id);
+        }
+        function back() {
+            // build sheet → list (no-op when already on the list)
+            root.closeHubBuild();
         }
     }
 
