@@ -480,6 +480,16 @@ Panel {
     // --- keyboard cursor --------------------------------------------------------
     property int navTotal: root.filtered.length
 
+    // soft-scrolls the keyboard selection into view; imperative so user
+    // flicks and drags are never animated behind their back
+    NumberAnimation {
+        id: scrollRevealAnim
+        target: winScroller
+        property: "contentY"
+        duration: 200
+        easing.type: Easing.OutCubic
+    }
+
     onNavTotalChanged: {
         if (root.winCursor >= root.navTotal)
             root.winCursor = Math.max(0, root.navTotal - 1);
@@ -502,10 +512,15 @@ Panel {
         if (!item)
             return;
         var y = item.mapToItem(winScroller.contentItem, 0, 0).y;
+        var target = -1;
         if (y < winScroller.contentY + Style.space(4))
-            winScroller.contentY = Math.max(0, y - Style.space(36));
+            target = Math.max(0, y - Style.space(36));
         else if (y + item.height > winScroller.contentY + winScroller.height - Style.space(4))
-            winScroller.contentY = y + item.height - winScroller.height + Style.space(8);
+            target = y + item.height - winScroller.height + Style.space(8);
+        if (target >= 0) {
+            scrollRevealAnim.to = target;
+            scrollRevealAnim.restart();
+        }
     }
 
     function activateWinCursor() {
@@ -2329,10 +2344,15 @@ Panel {
                                 visible: root.hubMode
                                 scrollContent: winScroller.contentItem
                                 onReveal: function (y, height) {
+                                    var target = -1;
                                     if (y < winScroller.contentY + Style.space(4))
-                                        winScroller.contentY = Math.max(0, y - Style.space(36));
+                                        target = Math.max(0, y - Style.space(36));
                                     else if (y + height > winScroller.contentY + winScroller.height - Style.space(4))
-                                        winScroller.contentY = y + height - winScroller.height + Style.space(8);
+                                        target = y + height - winScroller.height + Style.space(8);
+                                    if (target >= 0) {
+                                        scrollRevealAnim.to = target;
+                                        scrollRevealAnim.restart();
+                                    }
                                 }
                                 Layout.fillWidth: true
                                 listMode: root.hubBuildId === ""
