@@ -114,7 +114,6 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: Style.space(3)
                         radius: 0
                         color: card.hot ? Style.hoverFillFor(hp.fg, hp.accentColor) : "transparent"
                         border.width: 1
@@ -349,7 +348,6 @@ Item {
 
                             Rectangle {
                                 anchors.fill: parent
-                                radius: Style.space(3)
                                 radius: 0
                                 color: slotRow.hot ? Style.hoverFillFor(hp.fg, hp.accentColor) : "transparent"
                                 border.width: 1
