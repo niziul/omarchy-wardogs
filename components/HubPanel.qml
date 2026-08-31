@@ -60,8 +60,8 @@ Item {
     readonly property color accentColor: Color.accent
 
     // Detail sections in flat cursor order: Equipment → Gear → Storage
-    // (the storage group also carries the Traversal slots — parachute,
-    // bandages, throwables — exactly like the site). `base` is the
+    // (backpack). Traversal slots are not cards — they render only in the
+    // backpack storage grid, which is mouse-interactive. `base` is the
     // section's first flat row.
     readonly property var sections: {
         if (!hp.build)
@@ -72,7 +72,7 @@ Item {
         for (var i = 0; i < order.length; i++) {
             var want = order[i];
             var rows = hp.build.slots.filter(function (s) {
-                return s.section === want || (want === "Storage" && s.section === "Traversal");
+                return s.section === want;
             });
             if (rows.length > 0) {
                 out.push({
@@ -96,13 +96,33 @@ Item {
     // equipped and sizes it from that backpack (cols×rows come from the
     // payload). Cells fill row-major from the Traversal slots — the same
     // flat indices the storage cards use.
-    readonly property var traversalSlots: build !== null ? build.slots.filter(function (s) {
-        return s.section === "Traversal";
-    }) : []
+
     readonly property bool hasBackpack: build !== null && build.slots.some(function (s) {
         return s.section === "Storage";
     })
-    readonly property int boardBase: build !== null ? build.slots.length - traversalSlots.length : 0
+    // The parachute is the site's TRAVERSAL slot card (skeleton when
+    // empty); every other traversal slot is a grid item only
+    readonly property var traversalCard: {
+        if (build === null)
+            return null;
+        for (var i = 0; i < build.slots.length; i++) {
+            var sl = build.slots[i];
+            if (sl.section === "Traversal" && String(sl.itemId).indexOf("parachute") === 0)
+                return {"slot": sl, "flat": i};
+        }
+        return {"slot": {"itemId": "", "name": "TRAVERSAL", "weight": 0, "price": ""}, "flat": -1};
+    }
+    readonly property var gridFlats: {
+        var out = [];
+        if (build !== null) {
+            for (var i = 0; i < build.slots.length; i++) {
+                var sl = build.slots[i];
+                if (sl.section === "Traversal" && String(sl.itemId).indexOf("parachute") !== 0)
+                    out.push(i);
+            }
+        }
+        return out;
+    }
     readonly property var board: build !== null && build.board ? build.board : null
 
     // cash-green for slot prices, the site's price language
@@ -1180,6 +1200,154 @@ Item {
                                         }
                                     }
                                 }
+                                Repeater {
+                                    model: hp.traversalCard !== null ? 1 : 0
+
+                                    // the site's TRAVERSAL slot: the parachute
+                                    // when equipped, a dim mouse-ignoring skeleton
+                                    // otherwise; stackables live in the grid only
+                                    delegate: Item {
+                                        id: travCard
+                                        required property int index
+                                        readonly property var slot: hp.traversalCard.slot
+                                        readonly property bool skeleton: String(slot.itemId) === ""
+                                        readonly property int flat: hp.traversalCard.flat
+                                        property bool mouseHot: false
+                                        readonly property bool hot: mouseHot
+
+                                        Layout.fillWidth: true
+                                        implicitHeight: Style.space(104)
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 0
+                                            color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
+                                            border.width: 1
+                                            border.color: travCard.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, travCard.skeleton ? 0.08 : 0.15)
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: !travCard.skeleton
+                                            cursorShape: !travCard.skeleton ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                            onClicked: function (mouse) {
+                                                if (mouse.button === Qt.RightButton)
+                                                    hp.markSlot(travCard.flat);
+                                                else
+                                                    hp.openItem("https://wardogs.zone/database/" + travCard.slot.itemId);
+                                            }
+                                            hoverEnabled: !travCard.skeleton
+                                            onContainsMouseChanged: travCard.mouseHot = containsMouse
+                                        }
+
+                                        Rectangle {
+                                            visible: travCard.slot.weight > 0
+                                            anchors.top: parent.top
+                                            anchors.right: parent.right
+                                            anchors.margins: Style.space(4)
+                                            implicitWidth: travWeightText.implicitWidth + Style.space(10)
+                                            implicitHeight: Style.space(15)
+                                            color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.08)
+                                            border.width: 1
+                                            border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.25)
+
+                                            Text {
+                                                id: travWeightText
+                                                anchors.centerIn: parent
+                                                text: travCard.slot.weight + " kg"
+                                                color: hp.dim
+                                                font.family: hp.fontFamily
+                                                font.pixelSize: Style.font.caption
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            visible: !travCard.skeleton && hp.badgeOf !== null && hp.badgeOf(travCard.slot.itemId) !== ""
+                                            anchors.top: parent.top
+                                            anchors.left: parent.left
+                                            anchors.margins: Style.space(4)
+                                            implicitWidth: Style.space(16)
+                                            implicitHeight: Style.space(16)
+                                            color: Color.popups.background
+                                            border.width: 1
+                                            border.color: hp.accentColor
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: !travCard.skeleton && hp.badgeOf !== null ? hp.badgeOf(travCard.slot.itemId) : ""
+                                                color: hp.accentColor
+                                                font.family: hp.fontFamily
+                                                font.pixelSize: Style.font.caption
+                                                font.bold: true
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: Style.space(6)
+                                            spacing: Style.space(4)
+
+                                            Item {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+
+                                                Image {
+                                                    id: travImg
+                                                    anchors.centerIn: parent
+                                                    width: parent.width
+                                                    height: parent.height
+                                                    visible: !travCard.skeleton && hp.iconUrlOf !== null && hp.iconUrlOf(travCard.slot.itemId) !== ""
+                                                    source: !travCard.skeleton && hp.iconUrlOf !== null ? hp.iconUrlOf(travCard.slot.itemId) : ""
+                                                    fillMode: Image.PreserveAspectFit
+                                                    mipmap: true
+                                                    smooth: true
+                                                }
+
+                                                ColorOverlay {
+                                                    anchors.fill: travImg
+                                                    visible: travImg.status === Image.Ready
+                                                    source: travImg
+                                                    color: hp.fg
+                                                    cached: false
+                                                }
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    visible: travCard.skeleton || hp.iconUrlOf === null || hp.iconUrlOf(travCard.slot.itemId) === ""
+                                                    text: "\uF7C4"
+                                                    color: hp.dim
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.title
+                                                }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: Style.space(6)
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: travCard.slot.name
+                                                    color: travCard.skeleton ? hp.dim : (travCard.hot ? hp.accentColor : hp.fg)
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: travCard.hot
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    visible: travCard.slot.price !== ""
+                                                    text: travCard.slot.price
+                                                    color: hp.cashColor
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1258,12 +1426,13 @@ Item {
                                 rowSpacing: Style.space(3)
 
                                 Repeater {
-                                    model: hp.hasBackpack && hp.board !== null ? hp.board.cols * hp.board.rows : 0
+                                    model: hp.hasBackpack && hp.board !== null ? Math.max(hp.gridFlats.length, hp.board.cols * hp.board.rows) : 0
 
                                     delegate: Item {
                                         id: boardCell
                                         required property int index
-                                        readonly property var slot: index < hp.traversalSlots.length ? hp.traversalSlots[index] : null
+                                        readonly property int flat: index < hp.gridFlats.length ? hp.gridFlats[index] : -1
+                                        readonly property var slot: flat >= 0 ? hp.build.slots[flat] : null
                                         readonly property bool filled: slot !== null
                                         // mouse-only highlight: the storage card is
                                         // the canonical visual for this flat slot, so
@@ -1288,7 +1457,7 @@ Item {
                                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                                             onClicked: function (mouse) {
                                                 if (mouse.button === Qt.RightButton)
-                                                    hp.markSlot(hp.boardBase + boardCell.index);
+                                                    hp.markSlot(boardCell.flat);
                                                 else
                                                     hp.openItem("https://wardogs.zone/database/" + boardCell.slot.itemId);
                                             }

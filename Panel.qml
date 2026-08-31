@@ -908,8 +908,17 @@ Panel {
     }
 
     function hubRows() {
-        // Flat slot count for the detail cursor.
-        return root.hubBuild ? root.hubBuild.slots.length : 0;
+        // Flat slot count for the detail cursor: everything except the
+        // Traversal slots, which render only in the storage grid (the raw
+        // slots array is grouped non-traversal-first).
+        var n = 0;
+        if (root.hubBuild) {
+            for (var i = 0; i < root.hubBuild.slots.length; i++) {
+                if (root.hubBuild.slots[i].section !== "Traversal")
+                    n++;
+            }
+        }
+        return n;
     }
 
     // The hub panel filters/sorts its list internally (search + hot/top +
