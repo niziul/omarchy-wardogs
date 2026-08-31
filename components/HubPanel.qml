@@ -53,18 +53,20 @@ Item {
 
     readonly property color accentColor: Color.accent
 
-    // Detail sections in flat cursor order: Equipment → Gear → Storage →
-    // Traversal (traversal slots also fill the storage board cells).
-    // `base` is the section's first row in the flat index.
+    // Detail sections in flat cursor order: Equipment → Gear → Storage
+    // (the storage group also carries the Traversal slots — parachute,
+    // bandages, throwables — exactly like the site, and they fill the
+    // storage board cells below). `base` is the section's first flat row.
     readonly property var sections: {
         if (!hp.build)
             return [];
         var out = [];
-        var order = ["Equipment", "Gear", "Storage", "Traversal"];
+        var order = ["Equipment", "Gear", "Storage"];
         var n = 0;
         for (var i = 0; i < order.length; i++) {
+            var want = order[i];
             var rows = hp.build.slots.filter(function (s) {
-                return s.section === order[i];
+                return s.section === want || (want === "Storage" && s.section === "Traversal");
             });
             if (rows.length > 0) {
                 out.push({
@@ -81,7 +83,7 @@ Item {
         return s.label === "Equipment" || s.label === "Gear";
     })
     readonly property var rightSections: hp.sections.filter(function (s) {
-        return s.label === "Storage" || s.label === "Traversal";
+        return s.label === "Storage";
     })
 
     // Storage board: the backpack contents are the Traversal slots (not
@@ -92,15 +94,7 @@ Item {
     readonly property var boardSlots: build !== null ? build.slots.filter(function (s) {
         return s.section === "Traversal";
     }) : []
-    readonly property int boardBase: {
-        // flat index of the first Traversal slot: the raw slots array groups
-        // sections in parse order, so it is the count of non-traversal rows
-        var n = 0;
-        for (var i = 0; i < hp.sections.length; i++)
-            if (hp.sections[i].label !== "Traversal")
-                n += hp.sections[i].rows.length;
-        return n;
-    }
+    readonly property int boardBase: build !== null ? build.slots.length - boardSlots.length : 0
     readonly property var board: build !== null && build.board ? build.board : null
 
     // cash-green for slot prices, the site's price language
