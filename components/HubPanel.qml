@@ -86,6 +86,19 @@ Item {
         return s.label === "Storage";
     })
 
+    // The storage board: the site opens it only once a backpack is
+    // equipped and sizes it from that backpack (cols×rows come from the
+    // payload). Cells fill row-major from the Traversal slots — the same
+    // flat indices the storage cards use.
+    readonly property var traversalSlots: build !== null ? build.slots.filter(function (s) {
+        return s.section === "Traversal";
+    }) : []
+    readonly property bool hasBackpack: build !== null && build.slots.some(function (s) {
+        return s.section === "Storage";
+    })
+    readonly property int boardBase: build !== null ? build.slots.length - traversalSlots.length : 0
+    readonly property var board: build !== null && build.board ? build.board : null
+
     // cash-green for slot prices, the site's price language
     readonly property color cashColor: "#4ade80"
 
@@ -1157,6 +1170,164 @@ Item {
                                                     font.pixelSize: Style.font.caption
                                                     font.bold: true
                                                 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // board panel: titled with the build name, sized by the
+                    // equipped backpack; without one the site shows the dashed
+                    // "equip a backpack" placeholder instead of a grid
+                    ColumnLayout {
+                        visible: hp.board !== null
+                        Layout.fillWidth: true
+                        spacing: Style.space(6)
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Style.space(6)
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: hp.build ? String(hp.build.title).toUpperCase() : ""
+                                color: hp.fg
+                                font.family: hp.fontFamily
+                                font.pixelSize: Style.font.caption
+                                font.bold: true
+                                font.letterSpacing: 1
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                visible: hp.hasBackpack && hp.board !== null
+                                text: hp.board !== null ? hp.board.cols + "×" + hp.board.rows : ""
+                                color: hp.dim
+                                font.family: hp.fontFamily
+                                font.pixelSize: Style.font.caption
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: hp.hasBackpack ? boardGrid.height + Style.space(28) : Style.space(120)
+                            radius: 0
+                            color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.03)
+                            border.width: 1
+                            border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.2)
+
+                            // empty state: no backpack equipped
+                            ColumnLayout {
+                                anchors.centerIn: parent
+                                visible: !hp.hasBackpack
+                                spacing: Style.space(8)
+
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "\uF7C4"
+                                    color: hp.dim
+                                    font.family: hp.fontFamily
+                                    font.pixelSize: Style.font.title
+                                }
+
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: "EQUIP A BACKPACK TO OPEN STORAGE"
+                                    color: hp.dim
+                                    font.family: hp.fontFamily
+                                    font.pixelSize: Style.font.caption
+                                    font.letterSpacing: 1
+                                }
+                            }
+
+                            // grid: traversal slots fill the parsed frame
+                            GridLayout {
+                                id: boardGrid
+                                anchors.centerIn: parent
+                                visible: hp.hasBackpack
+                                columns: hp.board !== null ? hp.board.cols : 3
+                                columnSpacing: Style.space(3)
+                                rowSpacing: Style.space(3)
+
+                                Repeater {
+                                    model: hp.hasBackpack && hp.board !== null ? hp.board.cols * hp.board.rows : 0
+
+                                    delegate: Item {
+                                        id: boardCell
+                                        required property int index
+                                        readonly property var slot: index < hp.traversalSlots.length ? hp.traversalSlots[index] : null
+                                        readonly property bool filled: slot !== null
+                                        property bool mouseHot: false
+                                        readonly property bool hot: mouseHot || hp.boardBase + boardCell.index === hp.cursor
+                                        onHotChanged: if (hot)
+                                            hp.hotItem = boardCell
+
+                                        Layout.preferredWidth: Style.space(46)
+                                        Layout.preferredHeight: Style.space(46)
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 0
+                                            color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, boardCell.filled ? (boardCell.hot ? 0.09 : 0.05) : 0.02)
+                                            border.width: 1
+                                            border.color: boardCell.hot && boardCell.filled ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, boardCell.filled ? 0.3 : 0.12)
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: boardCell.filled
+                                            cursorShape: boardCell.filled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                            onClicked: function (mouse) {
+                                                if (mouse.button === Qt.RightButton)
+                                                    hp.markSlot(hp.boardBase + boardCell.index);
+                                                else
+                                                    hp.openItem("https://wardogs.zone/database/" + boardCell.slot.itemId);
+                                            }
+                                            hoverEnabled: true
+                                            onContainsMouseChanged: boardCell.mouseHot = containsMouse
+                                        }
+
+                                        Image {
+                                            id: cellImg
+                                            anchors.centerIn: parent
+                                            width: parent.width - Style.space(10)
+                                            height: parent.height - Style.space(10)
+                                            visible: boardCell.filled && hp.iconUrlOf !== null && hp.iconUrlOf(boardCell.slot.itemId) !== ""
+                                            source: boardCell.filled && hp.iconUrlOf !== null ? hp.iconUrlOf(boardCell.slot.itemId) : ""
+                                            fillMode: Image.PreserveAspectFit
+                                            mipmap: true
+                                            smooth: true
+                                        }
+
+                                        ColorOverlay {
+                                            anchors.fill: cellImg
+                                            visible: cellImg.status === Image.Ready
+                                            source: cellImg
+                                            color: hp.fg
+                                            cached: false
+                                        }
+
+                                        Rectangle {
+                                            visible: boardCell.filled && hp.badgeOf !== null && hp.badgeOf(boardCell.slot.itemId) !== ""
+                                            anchors.top: parent.top
+                                            anchors.left: parent.left
+                                            anchors.margins: Style.space(3)
+                                            implicitWidth: Style.space(14)
+                                            implicitHeight: Style.space(14)
+                                            color: Color.popups.background
+                                            border.width: 1
+                                            border.color: hp.accentColor
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: boardCell.filled && hp.badgeOf !== null ? hp.badgeOf(boardCell.slot.itemId) : ""
+                                                color: hp.accentColor
+                                                font.family: hp.fontFamily
+                                                font.pixelSize: Style.font.caption
+                                                font.bold: true
                                             }
                                         }
                                     }
