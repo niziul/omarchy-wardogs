@@ -46,7 +46,7 @@ BorderSurface {
         onTapped: tile.openRequested()
     }
 
-    // artwork fills the card
+    // artwork fills the card, swelling slightly on focus
     Image {
         id: iconImg
         anchors.fill: parent
@@ -58,6 +58,13 @@ BorderSurface {
         fillMode: Image.PreserveAspectFit
         mipmap: true
         smooth: true
+        scale: tile.hot ? 1.07 : 1.0
+        Behavior on scale {
+            NumberAnimation {
+                duration: 130
+                easing.type: Easing.OutCubic
+            }
+        }
     }
 
     ColorOverlay {
