@@ -46,18 +46,15 @@ BorderSurface {
         onTapped: tile.openRequested()
     }
 
-    // artwork fills the card, swelling slightly on focus
-    Image {
-        id: iconImg
+    // artwork fills the card, swelling slightly on focus. The image and its
+    // tint overlay live inside one wrapper so the zoom scales both together —
+    // scaling the image alone desyncs it from the overlay (anchors track
+    // geometry, not transforms) and the untinted white source peeks out.
+    Item {
         anchors.fill: parent
         anchors.margins: Style.space(10)
         anchors.bottomMargin: Style.space(68)
         visible: tile.iconSource !== ""
-        source: tile.iconSource
-        asynchronous: false
-        fillMode: Image.PreserveAspectFit
-        mipmap: true
-        smooth: true
         scale: tile.hot ? 1.07 : 1.0
         Behavior on scale {
             NumberAnimation {
@@ -65,14 +62,24 @@ BorderSurface {
                 easing.type: Easing.OutCubic
             }
         }
-    }
 
-    ColorOverlay {
-        anchors.fill: iconImg
-        visible: iconImg.status === Image.Ready
-        source: iconImg
-        color: tile.fg
-        cached: false
+        Image {
+            id: iconImg
+            anchors.fill: parent
+            source: tile.iconSource
+            asynchronous: false
+            fillMode: Image.PreserveAspectFit
+            mipmap: true
+            smooth: true
+        }
+
+        ColorOverlay {
+            anchors.fill: parent
+            visible: iconImg.status === Image.Ready
+            source: iconImg
+            color: tile.fg
+            cached: false
+        }
     }
 
     Text {
