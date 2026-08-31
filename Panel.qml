@@ -862,11 +862,15 @@ Panel {
         return root.hubBuild ? root.hubBuild.slots.length : 0;
     }
 
+    // The hub panel filters/sorts its list internally (search + hot/top +
+    // role chips); the cursor indexes into THAT list, so activation reads
+    // hubPanel.filteredBuilds rather than the raw hubBuilds.
     function hubMove(d) {
         if (root.hubBuildId === "") {
-            if (root.hubBuilds.length === 0)
+            var n = hubPanel.filteredBuilds.length;
+            if (n === 0)
                 return;
-            root.hubCursor = clamp(root.hubCursor + d, 0, root.hubBuilds.length - 1);
+            root.hubCursor = clamp(root.hubCursor + d, 0, n - 1);
         } else {
             root.hubSlotCursor = clamp(root.hubSlotCursor + d, 0, Math.max(0, hubRows() - 1));
         }
@@ -874,8 +878,9 @@ Panel {
 
     function hubActivate() {
         if (root.hubBuildId === "") {
-            if (root.hubCursor < root.hubBuilds.length)
-                openHubBuild(root.hubBuilds[root.hubCursor].id);
+            var list = hubPanel.filteredBuilds;
+            if (root.hubCursor < list.length)
+                openHubBuild(list[root.hubCursor].id);
         } else if (root.hubSlotCursor < hubRows()) {
             openItem(Model.itemUrl(root.hubBuild.slots[root.hubSlotCursor].itemId));
         }
@@ -1615,6 +1620,10 @@ Panel {
                         root.markHubSlot();
                     else if (event.text === "v" || event.text === "V")
                         root.openCompare();
+                    else if (event.text === "/" && root.hubBuildId === "") {
+                        hubPanel.searchField.forceActiveFocus();
+                        hubPanel.searchField.cursorPosition = hubPanel.searchField.text.length;
+                    }
                     return;
                 } else if (root.compareMode) {
                     // Compare view: x swaps sides, v (or esc) goes back.
@@ -2091,6 +2100,7 @@ Panel {
 
                             // ---------- loadout hub ----------
                             HubPanel {
+                                id: hubPanel
                                 visible: root.hubMode
                                 Layout.fillWidth: true
                                 listMode: root.hubBuildId === ""
@@ -2103,9 +2113,9 @@ Panel {
                                 dim: root.dim
                                 fontFamily: root.fontFamily
                                 iconUrlOf: root.iconFileUrl
-                                onOpenBuild: function (index) {
-                                    if (index < root.hubBuilds.length)
-                                        openHubBuild(root.hubBuilds[index].id);
+                                focusTarget: winKeys
+                                onOpenBuild: function (id) {
+                                    openHubBuild(id);
                                 }
                                 onOpenItem: function (url) {
                                     root.openItem(url);
@@ -2325,7 +2335,7 @@ Panel {
                     // Help pinned to the bottom of the window.
                     Text {
                         Layout.fillWidth: true
-                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : root.hubMode ? (root.hubBuildId !== "" ? "enter open item · c mark for compare · esc back to builds" : "↑↓ or jk select · enter open build · esc back") : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
+                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : root.hubMode ? (root.hubBuildId !== "" ? "enter open item · c mark for compare · esc back to builds" : "↑↓ or jk select · enter open build · / search · hot/top + role filters · esc back") : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
                         color: root.dim
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption

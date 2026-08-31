@@ -98,6 +98,45 @@ test("parseHubBuild returns null on empty input", function () {
   assert.strictEqual(H.parseHubBuild(null), null);
 });
 
+test("hubRoles exposes the fixed role set", function () {
+  assert.deepStrictEqual(H.hubRoles(), ["Infantry", "Medic", "Recon", "Driver", "Support", "Pilot"]);
+});
+
+test("ageDays reads h/d ages and treats unknown as ancient", function () {
+  assert.strictEqual(H.ageDays("1d"), 1);
+  assert.strictEqual(H.ageDays("12h"), 0.5);
+  assert.strictEqual(H.ageDays("3d"), 3);
+  assert.strictEqual(H.ageDays(""), 999);
+  assert.strictEqual(H.ageDays("soon"), 999);
+});
+
+test("filterBuilds searches case-insensitively across fields", function () {
+  var builds = H.parseHubList(fixture("hub-list.html"));
+  var hits = H.filterBuilds(builds, "mosin", "", "");
+  assert.ok(hits.length >= 1);
+  hits.forEach(function (b) {
+    var hay = (b.title + " " + b.author + " " + b.weapon + " " + b.role).toLowerCase();
+    assert.ok(hay.indexOf("mosin") !== -1, "non-match leaked: " + b.title);
+  });
+  assert.strictEqual(H.filterBuilds(builds, "zzz-nope", "", "").length, 0);
+});
+
+test("filterBuilds filters by role and sorts top/hot", function () {
+  var builds = H.parseHubList(fixture("hub-list.html"));
+  var recon = H.filterBuilds(builds, "", "Recon", "");
+  recon.forEach(function (b) {
+    assert.strictEqual(b.role.toLowerCase(), "recon");
+  });
+  var top = H.filterBuilds(builds, "", "", "top");
+  for (var i = 1; i < top.length; i++) {
+    assert.ok((top[i - 1].score || 0) >= (top[i].score || 0), "top order broken at " + i);
+  }
+  // hot: a same-day build with any score outranks an older one at 0
+  var hot = H.filterBuilds(builds, "", "", "hot");
+  assert.strictEqual(hot[0].age, "1d");
+  assert.strictEqual(H.filterBuilds([], "x", "Recon", "hot").length, 0);
+});
+
 if (failed > 0) {
   console.error("\n" + failed + " failure(s)");
   process.exit(1);

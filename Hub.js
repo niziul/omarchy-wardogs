@@ -155,10 +155,56 @@ function parseHubList(html) {
   return builds
 }
 
+// The roles the hub list can be filtered by (site capitalization).
+var ROLES = ["Infantry", "Medic", "Recon", "Driver", "Support", "Pilot"]
+
+function hubRoles() {
+  return ROLES.slice()
+}
+
+// "1d" → 1, "12h" → 0.5; unknown ages rank as ancient.
+function ageDays(age) {
+  var m = String(age || "").match(/(\d+)\s*([dh])/)
+  if (!m) return 999
+  return m[2] === "h" ? parseInt(m[1], 10) / 24 : parseInt(m[1], 10)
+}
+
+// Filter + sort for the hub list. query matches title/author/weapon/role
+// case-insensitively; role "" means all; sort "" keeps the site's order,
+// "top" is by score, "hot" blends score with recency so a fresh build
+// outranks an old upvoted one.
+function filterBuilds(builds, query, role, sort) {
+  var q = String(query || "").toLowerCase()
+  var out = []
+  for (var i = 0; i < (builds || []).length; i++) {
+    var b = builds[i]
+    if (role !== "" && String(b.role || "").toLowerCase() !== role.toLowerCase()) continue
+    if (q !== "") {
+      var hay = (String(b.title || "") + " " + String(b.author || "") + " " + String(b.weapon || "") + " " + String(b.role || "")).toLowerCase()
+      if (hay.indexOf(q) === -1) continue
+    }
+    out.push(b)
+  }
+  if (sort === "top") {
+    out.sort(function (a, b) { return (b.score || 0) - (a.score || 0) })
+  } else if (sort === "hot") {
+    out.sort(function (a, b) {
+      var ha = ((a.score || 0) + 1) / Math.max(ageDays(a.age), 0.5)
+      var hb = ((b.score || 0) + 1) / Math.max(ageDays(b.age), 0.5)
+      return hb - ha
+    })
+  }
+  return out
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     flightChunks: flightChunks,
     parseHubList: parseHubList,
-    parseHubBuild: parseHubBuild
+    parseHubBuild: parseHubBuild,
+    ROLES: ROLES,
+    hubRoles: hubRoles,
+    ageDays: ageDays,
+    filterBuilds: filterBuilds
   }
 }
