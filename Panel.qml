@@ -17,10 +17,11 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
-import "Model.js" as Model
-import "Details.js" as Details
-import "Compare.js" as Compare
-import "components"
+    import "Model.js" as Model
+    import "Details.js" as Details
+    import "Compare.js" as Compare
+    import "Hub.js" as Hub
+    import "components"
 
 Panel {
     id: root
@@ -104,6 +105,23 @@ Panel {
     property string compareFetchId: ""     // id being read from the disk cache
     property var compareFetchQueue: []     // [{slot,id}] cache reads waiting their turn
     property var compareNetQueue: []       // [{slot,id}] disk misses awaiting the one pair fetch
+
+    // --- loadout hub ----------------------------------------------------------
+    // Published builds from wardogs.zone/loadouts/hub: list + per-build
+    // detail, fetched live with a disk cache (hub/*.json) and last-good
+    // memory, mirroring the news pipeline.
+    property bool hubMode: false
+    property var hubBuilds: []             // parsed list rows (Hub.parseHubList)
+    property string hubBuildId: ""         // "" = list view, else detail for this id
+    property var hubBuild: null            // parsed detail for hubBuildId
+    property int hubCursor: 0              // list cursor
+    property int hubSlotCursor: 0          // detail cursor (flat slot index)
+    property bool hubLoading: false
+    property bool hubListFailed: false     // live fetch failed; retry on next open
+    property string hubError: ""           // detail-view error text
+    property var hubDetailCache: ({})      // id -> parsed build (memory, last-good)
+    property string hubReadTarget: ""      // "list" | build id whose disk read is in flight
+    readonly property string hubDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/hub"
 
     // --- stats prefetch (settings) ------------------------------------------
     // Downloads the compare page for every catalog item in id pairs so the
@@ -364,9 +382,17 @@ Panel {
         toggleWindow();
     }
 
+    // Opens the in-plugin loadout hub (list → build detail). The site itself
+    // stays reachable through the site-link toolbar.
     function openHub() {
-        root.bar.run("xdg-open 'https://wardogs.zone/loadouts/hub'");
-        toggleWindow();
+        hubMode = true;
+        settingsMode = false;
+        newsMode = false;
+        compareMode = false;
+        open();
+        focusWinKeys();
+        if (root.hubBuilds.length === 0 && !root.hubLoading && !root.hubListFailed)
+            fetchHubList();
     }
 
     // The free-floating overlay window (left/middle click on the bar pill, or IPC).
@@ -529,6 +555,7 @@ Panel {
         settingsMode = true;
         newsMode = false;
         compareMode = false;
+        hubMode = false;
         open();
         focusWinKeys();
     }
@@ -537,6 +564,11 @@ Panel {
         settingsMode = false;
         newsMode = false;
         compareMode = false;
+        hubMode = false;
+        hubBuildId = "";
+        hubBuild = null;
+        hubSlotCursor = 0;
+        hubError = "";
         settingsStatusText = "";
         focusWinKeys();
     }
@@ -545,6 +577,7 @@ Panel {
         newsMode = true;
         settingsMode = false;
         compareMode = false;
+        hubMode = false;
         open();
         focusWinKeys();
     }
@@ -559,7 +592,14 @@ Panel {
         var i = root.winCursor;
         if (i < 0 || i >= root.filtered.length)
             return;
-        var row = root.filtered[i];
+        markCompareRow(root.filtered[i]);
+    }
+
+    // Generic toggle for any row shaped {id, name} — the browse grid and the
+    // hub's slot rows both feed the same compare slots.
+    function markCompareRow(row) {
+        if (!row || String(row.id || "") === "")
+            return;
         if (root.compareA && root.compareA.id === row.id) {
             root.compareA = null;
             root.compareDetailA = null;
@@ -592,6 +632,7 @@ Panel {
         root.compareMode = true;
         root.settingsMode = false;
         root.newsMode = false;
+        root.hubMode = false;
         requestCompareDetail("A", root.compareA);
         requestCompareDetail("B", root.compareB);
         focusWinKeys();
@@ -749,6 +790,194 @@ Panel {
                 detailCacheView.setText(JSON.stringify(detail));
             }
             finishCompareDetail(pending[i].slot, pending[i].id, detail);
+        }
+    }
+
+    // --- loadout hub ----------------------------------------------------------
+    // Resolution order per view: memory (hubBuilds / hubDetailCache), then
+    // the disk cache (hub/list.json, hub/{id}.json), then the live page.
+    // Live failures keep the last-good data and set an error line.
+    function hubCachePath(name) {
+        return root.hubDir + "/" + name + ".json";
+    }
+
+    function fetchHubList() {
+        root.hubLoading = true;
+        root.hubListFailed = false;
+        root.hubError = "";
+        root.hubReadTarget = "list";
+        hubCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", root.hubCachePath("list")];
+        hubCacheReadProc.running = true;
+    }
+
+    function openHubBuild(id) {
+        if (id === "")
+            return;
+        root.hubBuildId = id;
+        root.hubSlotCursor = 0;
+        root.hubError = "";
+        var hit = root.hubDetailCache[id];
+        if (hit) {
+            root.hubBuild = hit;
+            requestHubSlotIcons(hit);
+            return;
+        }
+        root.hubBuild = null;
+        root.hubReadTarget = id;
+        hubCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", root.hubCachePath(id)];
+        hubCacheReadProc.running = true;
+    }
+
+    function applyHubBuild(id, build) {
+        var cache = cloneObject(root.hubDetailCache, {});
+        cache[id] = build;
+        root.hubDetailCache = cache;
+        if (root.hubBuildId === id) {
+            root.hubBuild = build;
+            requestHubSlotIcons(build);
+        }
+    }
+
+    function requestHubSlotIcons(build) {
+        if (!build)
+            return;
+        var seen = {};
+        build.slots.forEach(function (s) {
+            if (s.itemId !== "" && !seen[s.itemId]) {
+                seen[s.itemId] = true;
+                requestIcon(s.itemId);
+            }
+        });
+    }
+
+    function closeHubBuild() {
+        root.hubBuildId = "";
+        root.hubBuild = null;
+        root.hubSlotCursor = 0;
+        root.hubError = "";
+    }
+
+    function hubRows() {
+        // Flat slot count for the detail cursor.
+        return root.hubBuild ? root.hubBuild.slots.length : 0;
+    }
+
+    function hubMove(d) {
+        if (root.hubBuildId === "") {
+            if (root.hubBuilds.length === 0)
+                return;
+            root.hubCursor = clamp(root.hubCursor + d, 0, root.hubBuilds.length - 1);
+        } else {
+            root.hubSlotCursor = clamp(root.hubSlotCursor + d, 0, Math.max(0, hubRows() - 1));
+        }
+    }
+
+    function hubActivate() {
+        if (root.hubBuildId === "") {
+            if (root.hubCursor < root.hubBuilds.length)
+                openHubBuild(root.hubBuilds[root.hubCursor].id);
+        } else if (root.hubSlotCursor < hubRows()) {
+            openItem(Model.itemUrl(root.hubBuild.slots[root.hubSlotCursor].itemId));
+        }
+    }
+
+    function markHubSlot() {
+        if (root.hubBuildId === "" || root.hubSlotCursor >= hubRows())
+            return;
+        var slot = root.hubBuild.slots[root.hubSlotCursor];
+        markCompareRow({
+            "id": slot.itemId,
+            "name": slot.name
+        });
+    }
+
+    function onHubCacheRaw(raw) {
+        var target = root.hubReadTarget;
+        if (target === "")
+            return;
+        var parsed = null;
+        try {
+            var j = JSON.parse(String(raw || ""));
+            if (j && (Array.isArray(j) ? j.length > 0 : j.title))
+                parsed = j;
+        } catch (e) {
+            parsed = null;
+        }
+        if (target === "list") {
+            root.hubLoading = false;
+            if (parsed) {
+                root.hubBuilds = parsed;
+                root.hubReadTarget = "";
+                root.hubBuilds.forEach(function (b) {
+                    requestIcon(b.iconId);
+                });
+                return;
+            }
+            // disk miss → live fetch; hubReadTarget stays set so the
+            // response is routed back to the right handler
+            fetchHubListNetwork();
+        } else {
+            if (parsed) {
+                root.hubReadTarget = "";
+                applyHubBuild(target, parsed);
+                return;
+            }
+            fetchHubBuildNetwork(target);
+        }
+    }
+
+    function hubFetch(url) {
+        // sh -c arg order: $0=sh $1=url $2=cache dir (mkdir first — the
+        // FileView cache write below needs the directory to exist).
+        hubFetchProc.command = ["sh", "-c", "mkdir -p \"$2\"; curl -fsS --max-time 8 \"$1\"", "sh", url, root.hubDir];
+        hubFetchProc.running = true;
+    }
+
+    function fetchHubListNetwork() {
+        hubFetch("https://wardogs.zone/loadouts/hub");
+    }
+
+    function fetchHubBuildNetwork(id) {
+        hubFetch("https://wardogs.zone/loadouts/hub/" + id);
+    }
+
+    function onHubListHtml(raw) {
+        root.hubReadTarget = "";
+        root.hubLoading = false;
+        var capped = String(raw || "");
+        if (capped.length > root.maxDetailBytes)
+            capped = capped.substring(0, root.maxDetailBytes);
+        var builds = Hub.parseHubList(capped);
+        if (builds.length > 0) {
+            root.hubBuilds = builds;
+            hubCacheView.path = root.hubCachePath("list");
+            hubCacheView.setText(JSON.stringify(builds));
+            builds.forEach(function (b) {
+                requestIcon(b.iconId);
+            });
+        } else {
+            root.hubListFailed = true;
+            root.hubError = builds.length === 0 && root.hubBuilds.length === 0 ? "Offline — can't reach the loadout hub." : "";
+        }
+    }
+
+    function onHubBuildHtml(raw) {
+        var id = root.hubReadTarget;
+        root.hubReadTarget = "";
+        if (id === "" || id === "list")
+            return;
+        var capped = String(raw || "");
+        if (capped.length > root.maxDetailBytes)
+            capped = capped.substring(0, root.maxDetailBytes);
+        var build = Hub.parseHubBuild(capped);
+        if (build && build.title !== "") {
+            build.id = id;
+            hubCacheView.path = root.hubCachePath(id);
+            hubCacheView.setText(JSON.stringify(build));
+            applyHubBuild(id, build);
+            root.hubError = "";
+        } else {
+            root.hubError = "Could not load this build — open it on the site instead.";
         }
     }
 
@@ -1055,6 +1284,37 @@ Panel {
         stderr: StdioCollector {}
     }
 
+    // Hub: disk-cache read (cat) + live page fetch; the in-flight target
+    // ("list" or a build id) routes each response to its parser.
+    Process {
+        id: hubCacheReadProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.onHubCacheRaw(text)
+        }
+    }
+
+    Process {
+        id: hubFetchProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if (root.hubReadTarget === "list")
+                    root.onHubListHtml(text);
+                else
+                    root.onHubBuildHtml(text);
+            }
+        }
+        stderr: StdioCollector {}
+    }
+
+    FileView {
+        id: hubCacheView
+        watchChanges: false
+        atomicWrites: true
+        printErrors: false
+    }
+
     // Tiny python state helper (local file only; see scripts/persist.py).
     Process {
         id: persistProc
@@ -1290,25 +1550,29 @@ Panel {
             focus: true
 
             Keys.onEscapePressed: {
-                if (root.settingsMode || root.newsMode || root.compareMode)
+                if (root.hubMode && root.hubBuildId !== "") {
+                    closeHubBuild();
+                } else if (root.settingsMode || root.newsMode || root.compareMode || root.hubMode)
                     root.showMain();
                 else
                     root.close();
             }
-            Keys.onLeftPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode)
+            Keys.onLeftPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode)
                 root.moveWinCursor(-1, 0)
-            Keys.onRightPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode)
+            Keys.onRightPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode)
                 root.moveWinCursor(1, 0)
             Keys.onUpPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode)
-                root.moveWinCursor(0, -1)
+                root.hubMode ? root.hubMove(-1) : root.moveWinCursor(0, -1)
             Keys.onDownPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode)
-                root.moveWinCursor(0, 1)
+                root.hubMode ? root.hubMove(1) : root.moveWinCursor(0, 1)
             Keys.onReturnPressed: {
                 if (root.settingsMode) {
                     var cur = root.currentSettingsItem();
                     if (cur && typeof cur.clicked === "function")
                         cur.clicked();
-                } else if (!root.newsMode && !root.compareMode)
+                } else if (root.hubMode)
+                    root.hubActivate();
+                else if (!root.newsMode && !root.compareMode)
                     root.activateWinCursor();
             }
             Keys.onEnterPressed: {
@@ -1316,10 +1580,12 @@ Panel {
                     var cur = root.currentSettingsItem();
                     if (cur && typeof cur.clicked === "function")
                         cur.clicked();
-                } else if (!root.newsMode && !root.compareMode)
+                } else if (root.hubMode)
+                    root.hubActivate();
+                else if (!root.newsMode && !root.compareMode)
                     root.activateWinCursor();
             }
-            Keys.onSpacePressed: if (!root.settingsMode && !root.newsMode && !root.compareMode)
+            Keys.onSpacePressed: if (!root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode)
                 root.activateWinCursor()
             Keys.onPressed: function (event) {
                 if (event.modifiers & Qt.ControlModifier || event.modifiers & Qt.AltModifier)
@@ -1337,7 +1603,20 @@ Panel {
                     return;
                 } else if (root.newsMode)
                     return;
-                else if (root.compareMode) {
+                else if (root.hubMode) {
+                    // Hub: j/k move the cursor, c marks the slot's item into
+                    // the compare sheet, v opens the compare, esc already
+                    // handled above (detail → list → armory).
+                    if (event.key === Qt.Key_J || event.text === "j")
+                        root.hubMove(1);
+                    else if (event.key === Qt.Key_K || event.text === "k")
+                        root.hubMove(-1);
+                    else if (event.text === "c" || event.text === "C")
+                        root.markHubSlot();
+                    else if (event.text === "v" || event.text === "V")
+                        root.openCompare();
+                    return;
+                } else if (root.compareMode) {
                     // Compare view: x swaps sides, v (or esc) goes back.
                     if (event.text === "x" || event.text === "X")
                         root.swapCompare();
@@ -1418,8 +1697,8 @@ Panel {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
-                            title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : root.compareMode ? "Compare Items" : "Wardogs Zone"
-                            meta: (root.settingsMode || root.newsMode) ? "" : root.compareMode ? (root.compareA && root.compareB ? String(root.compareA.name) + "  vs  " + String(root.compareB.name) : "") : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
+                                title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : root.compareMode ? "Compare Items" : root.hubMode ? "Loadout Hub" : "Wardogs Zone"
+                                meta: (root.settingsMode || root.newsMode) ? "" : root.compareMode ? (root.compareA && root.compareB ? String(root.compareA.name) + "  vs  " + String(root.compareB.name) : "") : root.hubMode ? (root.hubBuildId !== "" && root.hubBuild ? String(root.hubBuild.title) : root.hubBuilds.length + " builds published") : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
                             foreground: root.fg
                             fontFamily: root.fontFamily
                             iconComponent: heroIconComponent
@@ -1583,7 +1862,7 @@ Panel {
                     }
 
                     RowLayout {
-                        visible: !root.settingsMode && !root.newsMode && !root.compareMode
+                        visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
                         Layout.fillWidth: true
                         spacing: Style.space(6)
 
@@ -1673,7 +1952,7 @@ Panel {
                             spacing: Style.space(8)
 
                             Text {
-                                visible: !root.settingsMode && !root.newsMode && !root.compareMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
                                 Layout.fillWidth: true
                                 text: root.items.length === 0 ? (root.indexLoading ? "Loading armory…" : "Offline — can't reach wardogs.zone") : (root.filtered.length === 0 ? "No items match." : (root.searchText !== "" ? "Search · " + root.filtered.length + " item(s) across categories" : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)")))
                                 color: root.dim
@@ -1734,7 +2013,7 @@ Panel {
                             }
 
                             GridLayout {
-                                visible: !root.settingsMode && !root.newsMode && !root.compareMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
                                 Layout.fillWidth: true
                                 Layout.bottomMargin: Style.space(2)
                                 columns: root.winGridColumns
@@ -1808,6 +2087,33 @@ Panel {
                                 fg: root.fg
                                 dim: root.dim
                                 fontFamily: root.fontFamily
+                            }
+
+                            // ---------- loadout hub ----------
+                            HubPanel {
+                                visible: root.hubMode
+                                Layout.fillWidth: true
+                                listMode: root.hubBuildId === ""
+                                builds: root.hubBuilds
+                                build: root.hubBuild
+                                cursor: root.hubBuildId === "" ? root.hubCursor : root.hubSlotCursor
+                                loading: root.hubLoading
+                                error: root.hubError
+                                fg: root.fg
+                                dim: root.dim
+                                fontFamily: root.fontFamily
+                                iconUrlOf: root.iconFileUrl
+                                onOpenBuild: function (index) {
+                                    if (index < root.hubBuilds.length)
+                                        openHubBuild(root.hubBuilds[index].id);
+                                }
+                                onOpenItem: function (url) {
+                                    root.openItem(url);
+                                }
+                                onMarkSlot: function (index) {
+                                    root.hubSlotCursor = index;
+                                    root.markHubSlot();
+                                }
                             }
 
                             NewsList {
@@ -2019,7 +2325,7 @@ Panel {
                     // Help pinned to the bottom of the window.
                     Text {
                         Layout.fillWidth: true
-                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
+                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : root.hubMode ? (root.hubBuildId !== "" ? "enter open item · c mark for compare · esc back to builds" : "↑↓ or jk select · enter open build · esc back") : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
                         color: root.dim
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption
