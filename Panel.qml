@@ -518,7 +518,9 @@ Panel {
         else if (y + item.height > winScroller.contentY + winScroller.height - Style.space(4))
             target = y + item.height - winScroller.height + Style.space(8);
         if (target >= 0) {
-            scrollRevealAnim.to = target;
+            // never scroll past the content ends
+            var max = Math.max(0, winScroller.contentHeight - winScroller.height);
+            scrollRevealAnim.to = Math.max(0, Math.min(target, max));
             scrollRevealAnim.restart();
         }
     }
@@ -2387,7 +2389,9 @@ Panel {
                                     else if (y + height > winScroller.contentY + winScroller.height - Style.space(4))
                                         target = y + height - winScroller.height + Style.space(8);
                                     if (target >= 0) {
-                                        scrollRevealAnim.to = target;
+                                        // never scroll past the content ends
+                                        var max = Math.max(0, winScroller.contentHeight - winScroller.height);
+                                        scrollRevealAnim.to = Math.max(0, Math.min(target, max));
                                         scrollRevealAnim.restart();
                                     }
                                 }
