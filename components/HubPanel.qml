@@ -28,6 +28,11 @@ Item {
     signal openItem(string url)
     signal markSlot(int index)
     signal markBuild(int index)
+    // Hover/mouse selection must travel through the parent instead of
+    // assigning cursor here — an imperative write would break the cursor
+    // binding and freeze keyboard j/k highlight updates.
+    signal hoverCard(int index)
+    signal hoverSlot(int index)
 
     // Delegate registry for cursor-follow scrolling: "c"+index for build
     // cards, "s"+flatIndex for detail slot rows.
@@ -120,7 +125,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: function (mouse) {
-                            hp.cursor = card.index;
+                            hp.hoverCard(card.index);
                             if (mouse.button === Qt.RightButton)
                                 hp.markBuild(card.index);
                             else
@@ -128,7 +133,7 @@ Item {
                         }
                         hoverEnabled: true
                         onContainsMouseChanged: if (containsMouse)
-                            hp.cursor = card.index
+                            hp.hoverCard(card.index)
                     }
 
                     RowLayout {
@@ -354,7 +359,7 @@ Item {
                                 cursorShape: Qt.PointingHandCursor
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 onClicked: function (mouse) {
-                                    hp.cursor = slotRow.flat;
+                                    hp.hoverSlot(slotRow.flat);
                                     if (mouse.button === Qt.RightButton)
                                         hp.markSlot(slotRow.flat);
                                     else
@@ -362,7 +367,7 @@ Item {
                                 }
                                 hoverEnabled: true
                                 onContainsMouseChanged: if (containsMouse)
-                                    hp.cursor = slotRow.flat
+                                    hp.hoverSlot(slotRow.flat)
                             }
 
                             RowLayout {

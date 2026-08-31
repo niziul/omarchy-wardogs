@@ -2293,6 +2293,12 @@ Panel {
                                     root.hubCursor = index;
                                     root.markHubBuild();
                                 }
+                                onHoverCard: function (index) {
+                                    root.hubCursor = index;
+                                }
+                                onHoverSlot: function (index) {
+                                    root.hubSlotCursor = index;
+                                }
                             }
 
                             NewsList {
