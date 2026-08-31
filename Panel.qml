@@ -992,8 +992,8 @@ Panel {
         }
         if (target === "list") {
             root.hubLoading = false;
-            if (parsed) {
-                root.hubBuilds = parsed;
+            if (parsed && parsed.v === Hub.CACHE_VERSION && parsed.builds) {
+                root.hubBuilds = parsed.builds;
                 root.hubBuilds.forEach(function (b) {
                     requestIcon(b.iconId);
                 });
@@ -1003,7 +1003,7 @@ Panel {
                 fetchHubListNetwork();
             }
         } else {
-            if (parsed) {
+            if (parsed && parsed.v === Hub.CACHE_VERSION) {
                 applyHubBuild(target, parsed);
             } else {
                 root.hubNetTarget = target;
@@ -1047,7 +1047,10 @@ Panel {
         if (builds.length > 0) {
             root.hubBuilds = builds;
             hubCacheView.path = root.hubCachePath("list");
-            hubCacheView.setText(JSON.stringify(builds));
+            hubCacheView.setText(JSON.stringify({
+                "v": Hub.CACHE_VERSION,
+                "builds": builds
+            }));
             builds.forEach(function (b) {
                 requestIcon(b.iconId);
             });
