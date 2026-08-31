@@ -528,6 +528,7 @@ Panel {
         settingsStatusText = "";
         settingsMode = true;
         newsMode = false;
+        compareMode = false;
         open();
         focusWinKeys();
     }
@@ -543,6 +544,7 @@ Panel {
     function openNews() {
         newsMode = true;
         settingsMode = false;
+        compareMode = false;
         open();
         focusWinKeys();
     }
@@ -1425,7 +1427,7 @@ Panel {
 
                         FocusScope {
                             id: winToolsScope
-                            visible: !root.settingsMode && !root.newsMode
+                            visible: !root.settingsMode && !root.newsMode && !root.compareMode
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.verticalCenter: parent.verticalCenter
                             implicitWidth: winSiteLinks.implicitWidth
@@ -1465,7 +1467,7 @@ Panel {
 
                         Button {
                             id: hubButton
-                            visible: !root.settingsMode && !root.newsMode
+                            visible: !root.settingsMode && !root.newsMode && !root.compareMode
                             radius: root.cornerRadius
                             tooltipText: "Open loadout hub"
                             foreground: root.fg
@@ -1487,7 +1489,7 @@ Panel {
 
                         Button {
                             id: newsButton
-                            visible: !root.settingsMode && !root.newsMode
+                            visible: !root.settingsMode && !root.newsMode && !root.compareMode
                             radius: root.cornerRadius
                             tooltipText: "News feed"
                             foreground: root.fg
@@ -1508,7 +1510,7 @@ Panel {
                         }
 
                             Button {
-                                visible: !root.settingsMode && !root.newsMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode
                                 radius: root.cornerRadius
                                 text: "\uF013"
                                 tooltipText: "Open settings"
