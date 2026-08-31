@@ -973,6 +973,9 @@ Panel {
                 fetchHubListNetwork();
             }
         } else {
+            // self-heal caches written before a schema addition (e.g. board)
+            if (parsed && parsed.board === undefined)
+                parsed = null;
             if (parsed) {
                 applyHubBuild(target, parsed);
             } else {

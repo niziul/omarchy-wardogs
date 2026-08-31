@@ -56,6 +56,8 @@ test("parseHubBuild extracts header, totals and role", function () {
   assert.strictEqual(b.cost, "$9,225");
   assert.strictEqual(b.weight, "7.43"); // client prop weightKg
   assert.strictEqual(b.itemsCarried, "38");
+  assert.strictEqual(b.board.cols, 3);
+  assert.strictEqual(b.board.rows, 5);
 });
 
 test("parseHubBuild slots: sections, ids, prices and weights", function () {
@@ -96,6 +98,8 @@ test("parseHubBuild slots: sections, ids, prices and weights", function () {
 test("parseHubBuild returns null on empty input", function () {
   assert.strictEqual(H.parseHubBuild(""), null);
   assert.strictEqual(H.parseHubBuild(null), null);
+  var empty = H.parseHubBuild("<html>no push rows</html>");
+  assert.strictEqual(empty === null || empty.board === null, true);
 });
 
 test("hubRoles exposes the fixed role set", function () {

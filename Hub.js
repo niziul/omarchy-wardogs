@@ -114,6 +114,16 @@ function parseSlots(t) {
 // Detail page: title, description, role, summary totals and the slot list.
 // The weight total is a client-component prop ("weightKg":7.43) — its label
 // and unit render client-side and are not in the payload.
+// Storage board frame: the grid box is server-rendered with its
+// dimensions as inline gridTemplate styles (the item stacks inside are
+// client-computed and not in the payload).
+function parseBoard(t) {
+  var cols = firstRe(t, /"gridTemplateColumns":"repeat\((\d+),/)
+  var rows = firstRe(t, /"gridTemplateRows":"repeat\((\d+),/)
+  if (cols === "" || rows === "") return null
+  return { cols: parseInt(cols, 10), rows: parseInt(rows, 10) }
+}
+
 function parseHubBuild(html) {
   var t = chunkOf(html)
   if (t === "") return null
@@ -126,6 +136,7 @@ function parseHubBuild(html) {
     cost: statByLabel(t, "Cost"),
     weight: unescapePrice(firstRe(t, /"weightKg":([\d.]+)/)),
     itemsCarried: statByLabel(t, "Pack"),
+    board: parseBoard(t),
     slots: parseSlots(t)
   }
 }
