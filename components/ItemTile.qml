@@ -16,6 +16,7 @@ BorderSurface {
     property string typeText: ""
     property string caliberText: ""
     property string price: ""
+    property string url: ""
     property string iconSource: ""
     property string badge: ""
     property bool selected: false
