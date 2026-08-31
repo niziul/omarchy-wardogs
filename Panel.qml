@@ -1570,6 +1570,26 @@ Panel {
         }
     }
 
+    // TEMP DEBUG: open hub build sheet for screenshots. Remove after.
+    IpcHandler {
+        target: "niziul.wardogs.hubshot"
+        function open() {
+            root.open();
+            root.openHub();
+            root.openHubBuild("ac8ef1364c");
+        }
+        function dbg() {
+            var b = root.hubBuild;
+            var counts = {};
+            if (b && b.slots) b.slots.forEach(function (s) { counts[s.section] = (counts[s.section] || 0) + 1; });
+            console.log("[hubdbg] build", b === null ? "null" : "obj", "| board", JSON.stringify(b ? b.board : "-"), "| slotSections", JSON.stringify(counts));
+            return "ok";
+        }
+        function scroll() {
+            winScroller.contentY = 0;
+        }
+    }
+
     // The free-floating overlay window (left/middle click on the bar widget).
     PanelWindow {
         id: taskWindow
