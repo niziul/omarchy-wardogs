@@ -2013,6 +2013,23 @@ Panel {
                         }
 
                         Button {
+                            visible: root.hubQuery !== ""
+                            radius: root.cornerRadius
+                            text: "\u2715"
+                            tooltipText: "Clear hub search"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: {
+                                root.hubQuery = "";
+                                hubSearchInput.text = "";
+                                hubSearchInput.forceActiveFocus();
+                            }
+                        }
+
+                        Button {
                             text: "Hot"
                             tooltipText: "Score blended with recency"
                             radius: root.cornerRadius
@@ -2258,6 +2275,7 @@ Panel {
                                 dim: root.dim
                                 fontFamily: root.fontFamily
                                 iconUrlOf: root.iconFileUrl
+                                scroller: winScroller
                                 badgeOf: function (id) {
                                     return root.compareA && root.compareA.id === id ? "A" : root.compareB && root.compareB.id === id ? "B" : "";
                                 }
@@ -2270,6 +2288,10 @@ Panel {
                                 onMarkSlot: function (index) {
                                     root.hubSlotCursor = index;
                                     root.markHubSlot();
+                                }
+                                onMarkBuild: function (index) {
+                                    root.hubCursor = index;
+                                    root.markHubBuild();
                                 }
                             }
 
@@ -2482,7 +2504,7 @@ Panel {
                     // Help pinned to the bottom of the window.
                     Text {
                         Layout.fillWidth: true
-                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : root.hubMode ? (root.hubBuildId !== "" ? "enter open item · c mark for compare · esc back to builds" : "↑↓ or jk select · enter open build · c mark for compare · / search · esc back") : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
+                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : root.hubMode ? (root.hubBuildId !== "" ? "click open · r-click or c mark for compare · esc back to builds" : "↑↓ or jk select · enter open build · r-click or c mark · / search · esc back") : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
                         color: root.dim
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption

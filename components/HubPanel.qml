@@ -23,9 +23,32 @@ Item {
     property string fontFamily: ""
     property var iconUrlOf: null        // function(id) -> cached icon url or ""
     property var badgeOf: null          // function(id) -> "A" | "B" | "" compare marker
+    property var scroller: null         // parent Flickable, for cursor-follow scrolling
     signal openBuild(string id)
     signal openItem(string url)
     signal markSlot(int index)
+    signal markBuild(int index)
+
+    // Delegate registry for cursor-follow scrolling: "c"+index for build
+    // cards, "s"+flatIndex for detail slot rows.
+    property var rowItems: ({})
+    property string rowKey: (listMode ? "c" : "s") + cursor
+
+    onCursorChanged: ensureCursorVisible()
+    onRowKeyChanged: ensureCursorVisible()
+
+    function ensureCursorVisible() {
+        if (scroller === null)
+            return;
+        var item = rowItems[rowKey];
+        if (item === undefined || item === null)
+            return;
+        var y = item.mapToItem(scroller.contentItem, 0, 0).y;
+        if (y < scroller.contentY + Style.space(4))
+            scroller.contentY = Math.max(0, y - Style.space(36));
+        else if (y + item.height > scroller.contentY + scroller.height - Style.space(4))
+            scroller.contentY = y + item.height - scroller.height + Style.space(8);
+    }
 
     readonly property color accentColor: Color.accent
     readonly property var sections: {
@@ -81,6 +104,8 @@ Item {
 
                     Layout.fillWidth: true
                     implicitHeight: Style.space(58)
+                    Component.onCompleted: hp.rowItems["c" + index] = card
+                    Component.onDestruction: delete hp.rowItems["c" + index]
 
                     Rectangle {
                         anchors.fill: parent
@@ -93,9 +118,13 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: {
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: function (mouse) {
                             hp.cursor = card.index;
-                            hp.openBuild(card.modelData.id);
+                            if (mouse.button === Qt.RightButton)
+                                hp.markBuild(card.index);
+                            else
+                                hp.openBuild(card.modelData.id);
                         }
                         hoverEnabled: true
                         onContainsMouseChanged: if (containsMouse)
@@ -193,20 +222,22 @@ Item {
                             spacing: Style.space(2)
 
                             Text {
-                                anchors.right: parent.right
+                                Layout.fillWidth: true
                                 text: card.modelData.cost
                                 color: hp.fg
                                 font.family: hp.fontFamily
                                 font.pixelSize: Style.font.caption
                                 font.bold: true
+                                horizontalAlignment: Text.AlignRight
                             }
 
                             Text {
-                                anchors.right: parent.right
+                                Layout.fillWidth: true
                                 text: card.modelData.weight + " kg · " + card.modelData.items + " items"
                                 color: hp.dim
                                 font.family: hp.fontFamily
                                 font.pixelSize: Style.font.caption
+                                horizontalAlignment: Text.AlignRight
                             }
                         }
 
@@ -307,6 +338,8 @@ Item {
 
                             Layout.fillWidth: true
                             implicitHeight: Style.space(26)
+                            Component.onCompleted: hp.rowItems["s" + flat] = slotRow
+                            Component.onDestruction: delete hp.rowItems["s" + flat]
 
                             Rectangle {
                                 anchors.fill: parent
@@ -319,9 +352,13 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: {
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onClicked: function (mouse) {
                                     hp.cursor = slotRow.flat;
-                                    hp.openItem("https://wardogs.zone/database/" + slotRow.modelData.itemId);
+                                    if (mouse.button === Qt.RightButton)
+                                        hp.markSlot(slotRow.flat);
+                                    else
+                                        hp.openItem("https://wardogs.zone/database/" + slotRow.modelData.itemId);
                                 }
                                 hoverEnabled: true
                                 onContainsMouseChanged: if (containsMouse)
