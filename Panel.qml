@@ -1729,9 +1729,11 @@ Panel {
                     // Hub: j/k move the cursor, c marks the slot's item into
                     // the compare sheet, v opens the compare, esc already
                     // handled above (detail → list → armory).
-                    if (event.key === Qt.Key_J || event.text === "j")
+                    // h/l join j/k — the hub cursor is a flat list, so they
+                    // simply mirror down/up
+                    if (event.key === Qt.Key_J || event.text === "j" || event.text === "l" || event.text === "L")
                         root.hubMove(1);
-                    else if (event.key === Qt.Key_K || event.text === "k")
+                    else if (event.key === Qt.Key_K || event.text === "k" || event.text === "h" || event.text === "H")
                         root.hubMove(-1);
                     else if (event.text === "c" || event.text === "C") {
                         if (root.hubBuildId === "")

@@ -45,10 +45,16 @@ Item {
     property var scrollContent: null
     signal reveal(int y, int height)
     function revealCursor() {
-        if (hp.hotItem === null || hp.scrollContent === null)
+        var it = hp.hotItem;
+        if (it === null || hp.scrollContent === null)
             return;
-        var pt = hp.hotItem.mapToItem(hp.scrollContent, 0, 0);
-        hp.reveal(Math.max(0, pt.y), hp.hotItem.height);
+        try {
+            var pt = it.mapToItem(hp.scrollContent, 0, 0);
+            hp.reveal(Math.max(0, pt.y), it.height);
+        } catch (e) {
+            // hotItem was destroyed by a rebuild; the next hot change
+            // re-registers a live delegate
+        }
     }
 
     readonly property color accentColor: Color.accent
@@ -1259,10 +1265,10 @@ Item {
                                         required property int index
                                         readonly property var slot: index < hp.traversalSlots.length ? hp.traversalSlots[index] : null
                                         readonly property bool filled: slot !== null
-                                        property bool mouseHot: false
-                                        readonly property bool hot: mouseHot || hp.boardBase + boardCell.index === hp.cursor
-                                        onHotChanged: if (hot)
-                                            hp.hotItem = boardCell
+                                        // mouse-only highlight: the storage card is
+                                        // the canonical visual for this flat slot, so
+                                        // the board copy never drives the reveal
+                                        property bool hot: false
 
                                         Layout.preferredWidth: Style.space(46)
                                         Layout.preferredHeight: Style.space(46)
