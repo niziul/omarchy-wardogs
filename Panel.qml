@@ -901,6 +901,25 @@ Panel {
         });
     }
 
+    // Mark the build under the list cursor for a build-vs-build compare.
+    // The card's summary numbers are seeded into the detail cache so the
+    // sheet resolves instantly — a /database fetch can't resolve build ids.
+    function markHubBuild() {
+        if (root.hubCursor >= root.hubFiltered.length)
+            return;
+        var row = root.hubFiltered[root.hubCursor];
+        var marked = (root.compareA && root.compareA.id === row.id) || (root.compareB && root.compareB.id === row.id);
+        // The pseudo detail doubles as the slot row (id + name) AND the
+        // seeded cache entry, so the sheet resolves with zero fetching.
+        var detail = Hub.buildToDetail(row);
+        if (!marked) {
+            var cache = cloneObject(root.compareCache, {});
+            cache[row.id] = detail;
+            root.compareCache = cache;
+        }
+        markCompareRow(detail);
+    }
+
     function onHubCacheRaw(raw) {
         var target = root.hubReadTarget;
         if (target === "")
@@ -1621,9 +1640,12 @@ Panel {
                         root.hubMove(1);
                     else if (event.key === Qt.Key_K || event.text === "k")
                         root.hubMove(-1);
-                    else if (event.text === "c" || event.text === "C")
-                        root.markHubSlot();
-                    else if (event.text === "v" || event.text === "V")
+                    else if (event.text === "c" || event.text === "C") {
+                        if (root.hubBuildId === "")
+                            root.markHubBuild();
+                        else
+                            root.markHubSlot();
+                    } else if (event.text === "v" || event.text === "V")
                         root.openCompare();
                     else if (event.text === "/" && root.hubBuildId === "") {
                         hubSearchInput.forceActiveFocus();
@@ -2236,6 +2258,9 @@ Panel {
                                 dim: root.dim
                                 fontFamily: root.fontFamily
                                 iconUrlOf: root.iconFileUrl
+                                badgeOf: function (id) {
+                                    return root.compareA && root.compareA.id === id ? "A" : root.compareB && root.compareB.id === id ? "B" : "";
+                                }
                                 onOpenBuild: function (id) {
                                     openHubBuild(id);
                                 }
@@ -2457,7 +2482,7 @@ Panel {
                     // Help pinned to the bottom of the window.
                     Text {
                         Layout.fillWidth: true
-                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : root.hubMode ? (root.hubBuildId !== "" ? "enter open item · c mark for compare · esc back to builds" : "↑↓ or jk select · enter open build · / search · hot/top + role filters · esc back") : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
+                        text: root.settingsMode ? "j/k or ↑↓ select · enter toggle · s save · esc back" : root.newsMode ? "click an article to open it · r refresh · esc back" : root.compareMode ? "x swap sides · v or esc back to the armory" : root.hubMode ? (root.hubBuildId !== "" ? "enter open item · c mark for compare · esc back to builds" : "↑↓ or jk select · enter open build · c mark for compare · / search · esc back") : "←→ ↑↓ · jk select · enter open · c mark for compare · v compare · / search · r refresh · n news ·  s settings · esc close"
                         color: root.dim
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption

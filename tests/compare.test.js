@@ -30,7 +30,7 @@ var a91 = {
 };
 
 test("fieldCount/fieldAt expose the fixed compare schema", function() {
-  assert.strictEqual(C.fieldCount(), 10);
+  assert.strictEqual(C.fieldCount(), 12);
   var f = C.fieldAt(0);
   assert.strictEqual(f.key, "price");
   assert.strictEqual(f.label, "Price");
@@ -51,7 +51,7 @@ test("rowActive is true when at least one side has a number", function() {
 test("valueText formats numbers with prefix/unit and blanks missing", function() {
   var price = C.fieldAt(0);
   var weight = C.fieldAt(1);
-  var ads = C.fieldAt(9);
+  var ads = C.fieldByKey("ads");
   assert.strictEqual(C.valueText(ak74, price), "$1,600"); // matches header formatPrice
   assert.strictEqual(C.valueText(a91, price), "$0");
   assert.strictEqual(C.valueText(ak74, weight), "3 kg");
@@ -63,8 +63,8 @@ test("valueText formats numbers with prefix/unit and blanks missing", function()
 });
 
 test("betterSide respects higher-is-better fields", function() {
-  var accuracy = C.fieldAt(2);
-  var rpm = C.fieldAt(3);
+  var accuracy = C.fieldByKey("accuracy");
+  var rpm = C.fieldByKey("rpm");
   assert.strictEqual(C.betterSide(accuracy, ak74, a91), "right"); // 1.5 > 0.825
   assert.strictEqual(C.betterSide(rpm, ak74, a91), "right");      // 700 > 650
   assert.strictEqual(C.betterSide(accuracy, a91, ak74), "left");
@@ -73,14 +73,14 @@ test("betterSide respects higher-is-better fields", function() {
 test("betterSide respects lower-is-better fields", function() {
   var price = C.fieldAt(0);
   var weight = C.fieldAt(1);
-  var ads = C.fieldAt(9);
+  var ads = C.fieldByKey("ads");
   assert.strictEqual(C.betterSide(price, ak74, a91), "right");   // 0 < 1600
   assert.strictEqual(C.betterSide(weight, ak74, a91), "left");   // 3 < 3.17
   assert.strictEqual(C.betterSide(ads, ak74, a91), "left");      // 0.45 faster
 });
 
 test("betterSide is '' on tie or missing", function() {
-  var recoil = C.fieldAt(6);
+  var recoil = C.fieldByKey("vRecoil");
   assert.strictEqual(C.betterSide(recoil, ak74, a91), ""); // both 1
   assert.strictEqual(C.betterSide(recoil, null, a91), "");
   assert.strictEqual(C.betterSide(recoil, {}, {}), "");
@@ -103,8 +103,19 @@ test("groups cover every field and resolve to field objects", function() {
     assert.ok(grp && grp.label && grp.fields.length > 0, "group " + g + " malformed");
     grp.fields.forEach(function(f) { covered.push(f.key); });
   }
-  assert.deepStrictEqual(covered, ["price", "weight", "accuracy", "rpm", "muzzleVelocity", "effectiveRange", "vRecoil", "hRecoil", "zoom", "ads"]);
+  assert.deepStrictEqual(covered, ["price", "weight", "items", "score", "accuracy", "rpm", "muzzleVelocity", "effectiveRange", "vRecoil", "hRecoil", "zoom", "ads"]);
   assert.strictEqual(C.groupAt(99), null);
+});
+
+test("item compares hide build-only rows", function() {
+  var items = C.fieldAt(2); // items
+  var score = C.fieldAt(3); // score
+  assert.strictEqual(C.rowActive(items, ak74, a91), false);
+  assert.strictEqual(C.rowActive(score, ak74, a91), false);
+  // basics group for two items: price+weight only
+  var basics = C.groupAt(0);
+  var active = basics.fields.filter(function(f) { return C.rowActive(f, ak74, a91); });
+  assert.deepStrictEqual(active.map(function(f) { return f.key; }), ["price", "weight"]);
 });
 
 test("groupActive hides groups with no numbers on either side", function() {

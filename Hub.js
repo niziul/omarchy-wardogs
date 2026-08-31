@@ -220,12 +220,32 @@ function filterBuilds(builds, query, role, sort) {
   return out
 }
 
+// Turn a list row into a compare-sheet pseudo detail. Seeding this into the
+// caller's detail cache makes a build-vs-build compare resolve instantly
+// from the card data — no /database fetch (which wouldn't know build ids).
+// Only Basics-schema numbers are produced; item stat groups stay hidden.
+function buildToDetail(b) {
+  if (!b) return null
+  return {
+    id: String(b.id || ""),
+    name: String(b.title || ""),
+    type: String(b.role || ""),
+    caliber: "",
+    kind: "loadout",
+    price: num(String(b.cost || "").replace(/\$/g, "")),
+    weight: num(b.weight),
+    items: num(b.items),
+    score: num(b.score)
+  }
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     flightChunks: flightChunks,
     chunkOf: chunkOf,
     parseHubList: parseHubList,
     parseHubBuild: parseHubBuild,
+    buildToDetail: buildToDetail,
     ROLES: ROLES,
     hubRoles: hubRoles,
     ageDays: ageDays,

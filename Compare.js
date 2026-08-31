@@ -11,6 +11,8 @@
 var FIELDS = [
   { key: "price",          label: "Price",        unit: "$",  higherIsBetter: false, prefix: true },
   { key: "weight",         label: "Weight",       unit: " kg", higherIsBetter: false },
+  { key: "items",          label: "Items",        unit: "",   higherIsBetter: false },
+  { key: "score",          label: "Score",        unit: "",   higherIsBetter: true },
   { key: "accuracy",       label: "Accuracy",     unit: "",   higherIsBetter: true },
   { key: "rpm",            label: "RPM",          unit: "",   higherIsBetter: true },
   { key: "muzzleVelocity", label: "Muzzle vel.",  unit: " m/s", higherIsBetter: true },
@@ -23,9 +25,11 @@ var FIELDS = [
 
 // The sheet groups its rows under labeled sections so related stats read as
 // one block instead of a flat dump; a group whose fields carry no numbers on
-// either side is omitted entirely (e.g. vehicles only ever show "Basics").
+// either side is omitted entirely (e.g. vehicles only ever show "Basics",
+// and build-vs-build compares resolve to Basics alone — item-only stat
+// groups stay hidden because builds carry no numbers for them).
 var GROUP_DEFS = [
-  { label: "Basics",     keys: ["price", "weight"] },
+  { label: "Basics",     keys: ["price", "weight", "items", "score"] },
   { label: "Ballistics", keys: ["accuracy", "rpm", "muzzleVelocity", "effectiveRange"] },
   { label: "Recoil",     keys: ["vRecoil", "hRecoil"] },
   { label: "Optics",     keys: ["zoom", "ads"] }
@@ -122,6 +126,7 @@ if (typeof module !== "undefined") {
     FIELDS: FIELDS,
     fieldCount: fieldCount,
     fieldAt: fieldAt,
+    fieldByKey: fieldByKey,
     groupCount: groupCount,
     groupAt: groupAt,
     groupActive: groupActive,

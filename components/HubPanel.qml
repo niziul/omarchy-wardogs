@@ -22,6 +22,7 @@ Item {
     property color dim: Qt.rgba(1, 1, 1, 0.62)
     property string fontFamily: ""
     property var iconUrlOf: null        // function(id) -> cached icon url or ""
+    property var badgeOf: null          // function(id) -> "A" | "B" | "" compare marker
     signal openBuild(string id)
     signal openItem(string url)
     signal markSlot(int index)
@@ -144,14 +145,38 @@ Item {
                             Layout.fillWidth: true
                             spacing: Style.space(2)
 
-                            Text {
+                            RowLayout {
                                 Layout.fillWidth: true
-                                text: card.modelData.title
-                                color: card.hot ? hp.accentColor : hp.fg
-                                font.family: hp.fontFamily
-                                font.pixelSize: Style.font.body
-                                font.bold: card.hot
-                                elide: Text.ElideRight
+                                spacing: Style.space(5)
+
+                                Rectangle {
+                                    visible: hp.badgeOf !== null && hp.badgeOf(card.modelData.id) !== ""
+                                    implicitWidth: Style.space(16)
+                                    implicitHeight: Style.space(16)
+                                    radius: Style.space(3)
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: hp.accentColor
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: hp.badgeOf !== null ? hp.badgeOf(card.modelData.id) : ""
+                                        color: hp.accentColor
+                                        font.family: hp.fontFamily
+                                        font.pixelSize: Style.font.caption
+                                        font.bold: true
+                                    }
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: card.modelData.title
+                                    color: card.hot ? hp.accentColor : hp.fg
+                                    font.family: hp.fontFamily
+                                    font.pixelSize: Style.font.body
+                                    font.bold: card.hot
+                                    elide: Text.ElideRight
+                                }
                             }
 
                             Text {
@@ -308,6 +333,25 @@ Item {
                                 anchors.leftMargin: Style.space(6)
                                 anchors.rightMargin: Style.space(6)
                                 spacing: Style.space(8)
+
+                                Rectangle {
+                                    visible: hp.badgeOf !== null && hp.badgeOf(slotRow.modelData.itemId) !== ""
+                                    implicitWidth: Style.space(16)
+                                    implicitHeight: Style.space(16)
+                                    radius: Style.space(3)
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: hp.accentColor
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: hp.badgeOf !== null ? hp.badgeOf(slotRow.modelData.itemId) : ""
+                                        color: hp.accentColor
+                                        font.family: hp.fontFamily
+                                        font.pixelSize: Style.font.caption
+                                        font.bold: true
+                                    }
+                                }
 
                                 Text {
                                     Layout.fillWidth: true

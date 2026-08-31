@@ -142,6 +142,19 @@ test("filterBuilds filters by role and sorts top/hot", function () {
   assert.strictEqual(H.filterBuilds([], "x", "Recon", "hot").length, 0);
 });
 
+test("buildToDetail maps a card onto the compare Basics schema", function () {
+  var builds = H.parseHubList(fixture("hub-list.html"));
+  var d = H.buildToDetail(builds[0]);
+  assert.strictEqual(d.id, "ac8ef1364c");
+  assert.strictEqual(d.name, "NINJA");
+  assert.strictEqual(d.type, "Recon");
+  assert.strictEqual(d.price, 9225);
+  assert.strictEqual(d.weight, 7.4);
+  assert.strictEqual(d.items, 38);
+  assert.strictEqual(d.score, 1);
+  assert.strictEqual(H.buildToDetail(null), null);
+});
+
 if (failed > 0) {
   console.error("\n" + failed + " failure(s)");
   process.exit(1);
