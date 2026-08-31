@@ -3,12 +3,15 @@ import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import qs.Commons
 import qs.Ui
+import "../Hub.js" as Hub
 
 // Loadout hub view: list of published builds, or one build's equipment
-// slots. Pure presentation — the already-filtered data, cursor and
-// loading/error come in as properties; the parent owns keyboard routing
-// (cursor moves, enter, c to mark a slot into the compare sheet, esc/v
-// back) and the pinned search/filter bar above this panel.
+// sheet styled after the wardogs.zone build page — header block, summary
+// stat cards with corner brackets, and a two-column slot body (wide
+// equipment cards left, gear/storage/traversal grids right). Pure
+// presentation: the already-filtered data, cursor and loading/error come
+// in as properties; the parent owns keyboard routing and the pinned
+// search/filter bar.
 Item {
     id: hp
 
@@ -34,8 +37,40 @@ Item {
     signal hoverCard(int index)
     signal hoverSlot(int index)
 
+    readonly property color accentColor: Color.accent
+
+    // Detail sections in flat cursor order: Equipment → Gear → Storage →
+    // Traversal; `base` is the section's first row in the flat index.
+    readonly property var sections: {
+        if (!hp.build)
+            return [];
+        var out = [];
+        var order = ["Equipment", "Gear", "Storage", "Traversal"];
+        var n = 0;
+        for (var i = 0; i < order.length; i++) {
+            var rows = hp.build.slots.filter(function (s) {
+                return s.section === order[i];
+            });
+            if (rows.length > 0) {
+                out.push({
+                    "label": order[i],
+                    "rows": rows,
+                    "base": n
+                });
+                n += rows.length;
+            }
+        }
+        return out;
+    }
+    readonly property var leftSections: hp.sections.filter(function (s) {
+        return s.label === "Equipment" || s.label === "Gear";
+    })
+    readonly property var rightSections: hp.sections.filter(function (s) {
+        return s.label === "Storage" || s.label === "Traversal";
+    })
+
     // Delegate registry for cursor-follow scrolling: "c"+index for build
-    // cards, "s"+flatIndex for detail slot rows.
+    // cards, "s"+flatIndex for detail slot cards.
     property var rowItems: ({})
     property string rowKey: (listMode ? "c" : "s") + cursor
 
@@ -55,26 +90,70 @@ Item {
             scroller.contentY = y + item.height - scroller.height + Style.space(8);
     }
 
-    readonly property color accentColor: Color.accent
-    readonly property var sections: {
-        if (!hp.build)
-            return [];
-        var out = [];
-        var order = ["Equipment", "Gear", "Storage", "Traversal"];
-        for (var i = 0; i < order.length; i++) {
-            var rows = hp.build.slots.filter(function (s) {
-                return s.section === order[i];
-            });
-            if (rows.length > 0)
-                out.push({
-                    "label": order[i],
-                    "rows": rows
-                });
-        }
-        return out;
-    }
-
     implicitHeight: content.implicitHeight
+
+    // Thin L-shaped corner marks, the site's stat-card signature.
+    component CornerBrackets: Item {
+        property color mark: hp.accentColor
+        anchors.fill: parent
+
+        Rectangle {
+            x: 0
+            y: 0
+            width: Style.space(10)
+            height: 1
+            color: parent.mark
+        }
+        Rectangle {
+            x: 0
+            y: 0
+            width: 1
+            height: Style.space(10)
+            color: parent.mark
+        }
+        Rectangle {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            width: Style.space(10)
+            height: 1
+            color: parent.mark
+        }
+        Rectangle {
+            anchors.top: parent.top
+            anchors.right: parent.right
+            width: 1
+            height: Style.space(10)
+            color: parent.mark
+        }
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            width: Style.space(10)
+            height: 1
+            color: parent.mark
+        }
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            width: 1
+            height: Style.space(10)
+            color: parent.mark
+        }
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            width: Style.space(10)
+            height: 1
+            color: parent.mark
+        }
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            width: 1
+            height: Style.space(10)
+            color: parent.mark
+        }
+    }
 
     ColumnLayout {
         id: content
@@ -155,8 +234,6 @@ Item {
                                 smooth: true
                             }
 
-                            // Hub art is white-on-transparent; overlay it into
-                            // the theme foreground like the armory tiles.
                             ColorOverlay {
                                 anchors.fill: buildImg
                                 visible: buildImg.status === Image.Ready
@@ -187,7 +264,7 @@ Item {
                                     visible: hp.badgeOf !== null && hp.badgeOf(card.modelData.id) !== ""
                                     implicitWidth: Style.space(16)
                                     implicitHeight: Style.space(16)
-                                    radius: Style.space(3)
+                                    radius: 0
                                     color: "transparent"
                                     border.width: 1
                                     border.color: hp.accentColor
@@ -257,42 +334,46 @@ Item {
             }
         }
 
-        // --- build detail -----------------------------------------------------
+        // --- build sheet ------------------------------------------------------
         ColumnLayout {
             visible: !hp.listMode
             Layout.fillWidth: true
-            spacing: Style.space(6)
+            spacing: Style.space(10)
 
-            Text {
+            // header: kicker, title, description, author meta
+            ColumnLayout {
                 Layout.fillWidth: true
-                text: hp.build ? String(hp.build.title) : ""
-                color: hp.fg
-                font.family: hp.fontFamily
-                font.pixelSize: Style.font.body
-                font.bold: true
-                elide: Text.ElideRight
-            }
+                spacing: Style.space(2)
 
-            Text {
-                Layout.fillWidth: true
-                visible: hp.build && hp.build.description !== ""
-                text: hp.build ? String(hp.build.description) : ""
-                color: hp.dim
-                font.family: hp.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
-            }
+                Text {
+                    text: "—  LOADOUT HUB"
+                    color: hp.accentColor
+                    font.family: hp.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 2
+                }
 
-            Text {
-                Layout.fillWidth: true
-                visible: hp.build
-                text: hp.build ? [hp.build.role !== "" ? hp.build.role : "", hp.build.cost, hp.build.weight !== "" ? hp.build.weight + " kg" : "", hp.build.itemsCarried !== "" ? hp.build.itemsCarried + " items" : ""].filter(function (p) {
-                    return p !== "";
-                }).join(" · ") : ""
-                color: hp.dim
-                font.family: hp.fontFamily
-                font.pixelSize: Style.font.caption
-                elide: Text.ElideRight
+                Text {
+                    Layout.fillWidth: true
+                    text: hp.build ? String(hp.build.title) : ""
+                    color: hp.fg
+                    font.family: hp.fontFamily
+                    font.pixelSize: Style.font.title
+                    font.bold: true
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: hp.build && hp.build.description !== ""
+                    text: hp.build ? String(hp.build.description) : ""
+                    color: hp.dim
+                    font.family: hp.fontFamily
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.WordWrap
+                }
+
             }
 
             Text {
@@ -305,125 +386,455 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
             }
 
-            Repeater {
-                model: hp.sections
+            // summary stat cards with corner brackets
+            RowLayout {
+                visible: hp.build !== null
+                Layout.fillWidth: true
+                spacing: Style.space(16)
 
-                delegate: ColumnLayout {
-                    required property var modelData
-                    required property int index
-                    readonly property int rowBase: {
-                        var n = 0;
-                        for (var g = 0; g < index; g++) n += hp.sections[g].rows.length;
-                        return n;
-                    }
+                Repeater {
+                    model: hp.build === null ? [] : [{
+                            "value": hp.build.cost,
+                            "label": "COST",
+                            "accented": true
+                        }, {
+                            "value": hp.build.weight !== "" ? hp.build.weight + " KG" : "",
+                            "label": "WEIGHT",
+                            "accented": false
+                        }, {
+                            "value": hp.build.itemsCarried,
+                            "label": "PACK · ITEMS CARRIED",
+                            "accented": false
+                        }, {
+                            "value": hp.build.role !== "" ? hp.build.role : "—",
+                            "label": "ROLE",
+                            "accented": false
+                        }]
 
-                    Layout.fillWidth: true
-                    spacing: Style.space(2)
+                    delegate: Item {
+                        id: statCard
+                        required property int index
+                        required property var modelData
 
-                    Text {
                         Layout.fillWidth: true
-                        Layout.topMargin: Style.space(6)
-                        text: modelData.label.toUpperCase()
-                        color: hp.dim
-                        font.family: hp.fontFamily
-                        font.pixelSize: Style.font.caption
-                        font.bold: true
-                        font.letterSpacing: 1
+                        implicitHeight: Style.space(62)
+
+                        CornerBrackets {
+                            mark: statCard.modelData.accented ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.55)
+                        }
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: Style.space(8)
+                            spacing: Style.space(2)
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: statCard.modelData.value
+                                color: statCard.modelData.accented ? hp.accentColor : hp.fg
+                                font.family: hp.fontFamily
+                                font.pixelSize: Style.font.title
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: statCard.modelData.label
+                                color: hp.dim
+                                font.family: hp.fontFamily
+                                font.pixelSize: Style.font.caption
+                                font.letterSpacing: 1
+                                elide: Text.ElideRight
+                            }
+                        }
                     }
+                }
+            }
 
-                    Repeater {
-                        model: modelData.rows
+            // two-column slot body: equipment+gear left, storage+traversal right
+            Row {
+                visible: hp.build !== null && hp.sections.length > 0
+                Layout.fillWidth: true
+                spacing: Style.space(12)
 
-                        delegate: Item {
-                            id: slotRow
-                            required property int index
-                            required property var modelData
-                            readonly property int flat: rowBase + index
-                            readonly property bool hot: flat === hp.cursor
+                Repeater {
+                    model: [{
+                            "cols": 1,
+                            "sections": hp.leftSections,
+                            "left": true
+                        }, {
+                            "cols": 2,
+                            "sections": hp.rightSections,
+                            "left": false
+                        }]
 
-                            Layout.fillWidth: true
-                            implicitHeight: Style.space(26)
-                            Component.onCompleted: hp.rowItems["s" + flat] = slotRow
-                            Component.onDestruction: delete hp.rowItems["s" + flat]
+                    delegate: ColumnLayout {
+                        id: bodyCol
+                        required property var modelData
+                        required property int index
 
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 0
-                                color: slotRow.hot ? Style.hoverFillFor(hp.fg, hp.accentColor) : "transparent"
-                                border.width: 1
-                                border.color: slotRow.hot ? hp.accentColor : "transparent"
-                            }
+                        width: index === 0 ? Math.round(hp.width * 0.55) : Math.round(hp.width * 0.45) - Style.space(12)
+                        spacing: Style.space(10)
 
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                onClicked: function (mouse) {
-                                    hp.hoverSlot(slotRow.flat);
-                                    if (mouse.button === Qt.RightButton)
-                                        hp.markSlot(slotRow.flat);
-                                    else
-                                        hp.openItem("https://wardogs.zone/database/" + slotRow.modelData.itemId);
-                                }
-                                hoverEnabled: true
-                                onContainsMouseChanged: if (containsMouse)
-                                    hp.hoverSlot(slotRow.flat)
-                            }
+                        Repeater {
+                            model: bodyCol.modelData.sections
 
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Style.space(6)
-                                anchors.rightMargin: Style.space(6)
-                                spacing: Style.space(8)
+                            delegate: ColumnLayout {
+                                id: sectionCol
+                                required property var modelData
+                                required property int index
 
-                                Rectangle {
-                                    visible: hp.badgeOf !== null && hp.badgeOf(slotRow.modelData.itemId) !== ""
-                                    implicitWidth: Style.space(16)
-                                    implicitHeight: Style.space(16)
-                                    radius: Style.space(3)
-                                    color: "transparent"
-                                    border.width: 1
-                                    border.color: hp.accentColor
+                                Layout.fillWidth: true
+                                spacing: Style.space(6)
+
+                                // section header: gold bar + label
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.space(6)
+
+                                    Rectangle {
+                                        implicitWidth: Style.space(3)
+                                        implicitHeight: Style.space(13)
+                                        color: hp.accentColor
+                                    }
 
                                     Text {
-                                        anchors.centerIn: parent
-                                        text: hp.badgeOf !== null ? hp.badgeOf(slotRow.modelData.itemId) : ""
-                                        color: hp.accentColor
+                                        text: sectionCol.modelData.label.toUpperCase()
+                                        color: hp.fg
                                         font.family: hp.fontFamily
                                         font.pixelSize: Style.font.caption
                                         font.bold: true
+                                        font.letterSpacing: 1
                                     }
                                 }
 
-                                Text {
+                                // equipment rows render one wide card per slot;
+                                // everything else lays out as a card grid
+                                GridLayout {
+                                    visible: sectionCol.modelData.label === "Equipment"
                                     Layout.fillWidth: true
-                                    text: slotRow.modelData.name
-                                    color: slotRow.hot ? hp.accentColor : hp.fg
-                                    font.family: hp.fontFamily
-                                    font.pixelSize: Style.font.caption
-                                    font.bold: slotRow.hot
-                                    elide: Text.ElideRight
+                                    columns: 1
+                                    columnSpacing: Style.space(8)
+                                    rowSpacing: Style.space(8)
+
+                                    Repeater {
+                                        model: sectionCol.modelData.rows
+
+                                        delegate: Item {
+                                            id: wideSlot
+                                            required property int index
+                                            required property var modelData
+                                            readonly property int flat: sectionCol.modelData.base + index
+                                            readonly property bool hot: flat === hp.cursor
+
+                                            Layout.fillWidth: true
+                                            implicitHeight: Style.space(88)
+                                            Component.onCompleted: hp.rowItems["s" + flat] = wideSlot
+                                            Component.onDestruction: delete hp.rowItems["s" + flat]
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 0
+                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
+                                                border.width: 1
+                                                border.color: wideSlot.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: function (mouse) {
+                                                    hp.hoverSlot(wideSlot.flat);
+                                                    if (mouse.button === Qt.RightButton)
+                                                        hp.markSlot(wideSlot.flat);
+                                                    else
+                                                        hp.openItem("https://wardogs.zone/database/" + wideSlot.modelData.itemId);
+                                                }
+                                                hoverEnabled: true
+                                                onContainsMouseChanged: if (containsMouse)
+                                                    hp.hoverSlot(wideSlot.flat)
+                                            }
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: Style.space(6)
+                                                spacing: Style.space(10)
+
+                                                Item {
+                                                    Layout.preferredWidth: Style.space(70)
+                                                    Layout.fillHeight: true
+
+                                                    Image {
+                                                        id: wideImg
+                                                        anchors.centerIn: parent
+                                                        width: parent.width
+                                                        height: parent.height
+                                                        visible: hp.iconUrlOf !== null && hp.iconUrlOf(wideSlot.modelData.itemId) !== ""
+                                                        source: hp.iconUrlOf !== null ? hp.iconUrlOf(wideSlot.modelData.itemId) : ""
+                                                        fillMode: Image.PreserveAspectFit
+                                                        mipmap: true
+                                                        smooth: true
+                                                    }
+
+                                                    ColorOverlay {
+                                                        anchors.fill: wideImg
+                                                        visible: wideImg.status === Image.Ready
+                                                        source: wideImg
+                                                        color: hp.fg
+                                                        cached: false
+                                                    }
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        visible: hp.iconUrlOf === null || hp.iconUrlOf(wideSlot.modelData.itemId) === ""
+                                                        text: "\uF7C4"
+                                                        color: hp.dim
+                                                        font.family: hp.fontFamily
+                                                        font.pixelSize: Style.font.title
+                                                    }
+                                                }
+
+                                                Item {
+                                                    Layout.fillWidth: true
+                                                    Layout.fillHeight: true
+
+                                                    // mag chip, top-left
+                                                    Rectangle {
+                                                        visible: wideSlot.modelData.mag > 0
+                                                        anchors.top: parent.top
+                                                        anchors.left: parent.left
+                                                        implicitWidth: Style.space(26)
+                                                        implicitHeight: Style.space(16)
+                                                        color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.08)
+                                                        border.width: 1
+                                                        border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.25)
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "[" + wideSlot.modelData.mag + "]"
+                                                            color: hp.dim
+                                                            font.family: hp.fontFamily
+                                                            font.pixelSize: Style.font.caption
+                                                        }
+                                                    }
+
+                                                    // A/B badge, after the mag chip
+                                                    Rectangle {
+                                                        visible: hp.badgeOf !== null && hp.badgeOf(wideSlot.modelData.itemId) !== ""
+                                                        anchors.top: parent.top
+                                                        anchors.left: parent.left
+                                                        anchors.leftMargin: wideSlot.modelData.mag > 0 ? Style.space(32) : 0
+                                                        implicitWidth: Style.space(16)
+                                                        implicitHeight: Style.space(16)
+                                                        color: Color.popups.background
+                                                        border.width: 1
+                                                        border.color: hp.accentColor
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: hp.badgeOf !== null ? hp.badgeOf(wideSlot.modelData.itemId) : ""
+                                                            color: hp.accentColor
+                                                            font.family: hp.fontFamily
+                                                            font.pixelSize: Style.font.caption
+                                                            font.bold: true
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        anchors.bottom: parent.bottom
+                                                        anchors.left: parent.left
+                                                        text: wideSlot.modelData.name
+                                                        color: wideSlot.hot ? hp.accentColor : hp.fg
+                                                        font.family: hp.fontFamily
+                                                        font.pixelSize: Style.font.caption
+                                                        font.bold: wideSlot.hot
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: wideSlot.modelData.price
+                                                    color: hp.accentColor
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
 
-                                Text {
-                                    visible: slotRow.modelData.weight > 0
-                                    text: slotRow.modelData.weight + " kg"
-                                    color: hp.dim
-                                    font.family: hp.fontFamily
-                                    font.pixelSize: Style.font.caption
-                                }
+                                GridLayout {
+                                    visible: sectionCol.modelData.label !== "Equipment"
+                                    Layout.fillWidth: true
+                                    columns: bodyCol.modelData.cols
+                                    columnSpacing: Style.space(8)
+                                    rowSpacing: Style.space(8)
 
-                                Text {
-                                    text: slotRow.modelData.price
-                                    color: hp.fg
-                                    font.family: hp.fontFamily
-                                    font.pixelSize: Style.font.caption
-                                    font.bold: true
+                                    Repeater {
+                                        model: sectionCol.modelData.rows
+
+                                        delegate: Item {
+                                            id: gridSlot
+                                            required property int index
+                                            required property var modelData
+                                            readonly property int flat: sectionCol.modelData.base + index
+                                            readonly property bool hot: flat === hp.cursor
+
+                                            Layout.fillWidth: true
+                                            implicitHeight: Style.space(104)
+                                            Component.onCompleted: hp.rowItems["s" + flat] = gridSlot
+                                            Component.onDestruction: delete hp.rowItems["s" + flat]
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: 0
+                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.04)
+                                                border.width: 1
+                                                border.color: gridSlot.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                                onClicked: function (mouse) {
+                                                    hp.hoverSlot(gridSlot.flat);
+                                                    if (mouse.button === Qt.RightButton)
+                                                        hp.markSlot(gridSlot.flat);
+                                                    else
+                                                        hp.openItem("https://wardogs.zone/database/" + gridSlot.modelData.itemId);
+                                                }
+                                                hoverEnabled: true
+                                                onContainsMouseChanged: if (containsMouse)
+                                                    hp.hoverSlot(gridSlot.flat)
+                                            }
+
+                                            // weight chip, top-right
+                                            Rectangle {
+                                                visible: gridSlot.modelData.weight > 0
+                                                anchors.top: parent.top
+                                                anchors.right: parent.right
+                                                anchors.margins: Style.space(4)
+                                                implicitWidth: weightText.implicitWidth + Style.space(10)
+                                                implicitHeight: Style.space(15)
+                                                color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.08)
+                                                border.width: 1
+                                                border.color: Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.25)
+
+                                                Text {
+                                                    id: weightText
+                                                    anchors.centerIn: parent
+                                                    text: gridSlot.modelData.weight + " kg"
+                                                    color: hp.dim
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                }
+                                            }
+
+                                            // A/B badge, top-left
+                                            Rectangle {
+                                                visible: hp.badgeOf !== null && hp.badgeOf(gridSlot.modelData.itemId) !== ""
+                                                anchors.top: parent.top
+                                                anchors.left: parent.left
+                                                anchors.margins: Style.space(4)
+                                                implicitWidth: Style.space(16)
+                                                implicitHeight: Style.space(16)
+                                                color: Color.popups.background
+                                                border.width: 1
+                                                border.color: hp.accentColor
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: hp.badgeOf !== null ? hp.badgeOf(gridSlot.modelData.itemId) : ""
+                                                    color: hp.accentColor
+                                                    font.family: hp.fontFamily
+                                                    font.pixelSize: Style.font.caption
+                                                    font.bold: true
+                                                }
+                                            }
+
+                                            ColumnLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: Style.space(6)
+                                                spacing: Style.space(4)
+
+                                                Item {
+                                                    Layout.fillWidth: true
+                                                    Layout.fillHeight: true
+
+                                                    Image {
+                                                        id: gridImg
+                                                        anchors.centerIn: parent
+                                                        width: parent.width
+                                                        height: parent.height
+                                                        visible: hp.iconUrlOf !== null && hp.iconUrlOf(gridSlot.modelData.itemId) !== ""
+                                                        source: hp.iconUrlOf !== null ? hp.iconUrlOf(gridSlot.modelData.itemId) : ""
+                                                        fillMode: Image.PreserveAspectFit
+                                                        mipmap: true
+                                                        smooth: true
+                                                    }
+
+                                                    ColorOverlay {
+                                                        anchors.fill: gridImg
+                                                        visible: gridImg.status === Image.Ready
+                                                        source: gridImg
+                                                        color: hp.fg
+                                                        cached: false
+                                                    }
+
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        visible: hp.iconUrlOf === null || hp.iconUrlOf(gridSlot.modelData.itemId) === ""
+                                                        text: "\uF7C4"
+                                                        color: hp.dim
+                                                        font.family: hp.fontFamily
+                                                        font.pixelSize: Style.font.title
+                                                    }
+                                                }
+
+                                                RowLayout {
+                                    Layout.fillWidth: true
+                                                    spacing: Style.space(6)
+
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        text: gridSlot.modelData.name
+                                                        color: gridSlot.hot ? hp.accentColor : hp.fg
+                                                        font.family: hp.fontFamily
+                                                        font.pixelSize: Style.font.caption
+                                                        font.bold: gridSlot.hot
+                                                        elide: Text.ElideRight
+                                                    }
+
+                                                    Text {
+                                                        text: gridSlot.modelData.price
+                                                        color: hp.accentColor
+                                                        font.family: hp.fontFamily
+                                                        font.pixelSize: Style.font.caption
+                                                        font.bold: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                visible: hp.build !== null && hp.sections.length === 0
+                text: "No slots on this build."
+                color: hp.dim
+                font.family: hp.fontFamily
+                font.pixelSize: Style.font.caption
+                horizontalAlignment: Text.AlignHCenter
             }
         }
     }

@@ -103,6 +103,7 @@ function parseSlots(t) {
       section: section,
       itemId: itemId,
       name: name,
+      mag: parseInt(firstRe(t.slice(m.index, m.index + 400), /"children":\["\[",(\d+),"\]"\]/) || "0", 10),
       weight: num(firstRe(t.slice(m.index, m.index + 700), /"children":"(\d+(?:\.\d+)?)"/)),
       price: unescapePrice(firstRe(t.slice(m.index, m.index + 1600), /"children":"(\$\$[\d,]+)"/))
     })

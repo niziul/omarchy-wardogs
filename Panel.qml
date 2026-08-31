@@ -121,6 +121,8 @@ Panel {
     property string hubError: ""           // detail-view error text
     property var hubDetailCache: ({})      // id -> parsed build (memory, last-good)
     property string hubReadTarget: ""      // "list" | build id whose disk read is in flight
+    property var hubReadQueue: []          // cache reads waiting their turn (shared proc)
+    property string hubNetTarget: ""       // "list" | build id whose live fetch is in flight
     readonly property string hubDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/hub"
     property string hubQuery: ""           // pinned search field
     property string hubRole: ""            // pinned role chip ("" = all)
@@ -810,9 +812,7 @@ Panel {
         root.hubLoading = true;
         root.hubListFailed = false;
         root.hubError = "";
-        root.hubReadTarget = "list";
-        hubCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", root.hubCachePath("list")];
-        hubCacheReadProc.running = true;
+        enqueueHubRead("list");
     }
 
     function openHubBuild(id) {
@@ -828,12 +828,39 @@ Panel {
             return;
         }
         root.hubBuild = null;
-        root.hubReadTarget = id;
-        hubCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", root.hubCachePath(id)];
+        enqueueHubRead(id);
+    }
+
+    // Cache reads share one Process; rapid openHub + openHubBuild calls must
+    // not overwrite each other's target, so reads queue and start in order.
+    function enqueueHubRead(target) {
+        if (root.hubReadTarget === target || root.hubReadQueue.indexOf(target) !== -1)
+            return;
+        if (root.hubReadTarget === "") {
+            startHubRead(target);
+            return;
+        }
+        root.hubReadQueue = root.hubReadQueue.filter(function (t) {
+            return t !== target;
+        }).concat([target]);
+    }
+
+    function startHubRead(target) {
+        root.hubReadTarget = target;
+        hubCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", target === "list" ? root.hubCachePath("list") : root.hubCachePath(target)];
         hubCacheReadProc.running = true;
     }
 
+    function dequeueHubRead() {
+        if (root.hubReadQueue.length === 0)
+            return;
+        var next = root.hubReadQueue[0];
+        root.hubReadQueue = root.hubReadQueue.slice(1);
+        startHubRead(next);
+    }
+
     function applyHubBuild(id, build) {
+        console.log("[hubdbg] apply", id, "title", build ? String(build.title) : "null", "keys", build ? Object.keys(build).join(",") : "-");
         var cache = cloneObject(root.hubDetailCache, {});
         cache[id] = build;
         root.hubDetailCache = cache;
@@ -922,6 +949,7 @@ Panel {
 
     function onHubCacheRaw(raw) {
         var target = root.hubReadTarget;
+        root.hubReadTarget = "";
         if (target === "")
             return;
         var parsed = null;
@@ -936,23 +964,23 @@ Panel {
             root.hubLoading = false;
             if (parsed) {
                 root.hubBuilds = parsed;
-                root.hubReadTarget = "";
                 root.hubBuilds.forEach(function (b) {
                     requestIcon(b.iconId);
                 });
-                return;
+            } else {
+                // disk miss → live fetch; hubNetTarget routes the response
+                root.hubNetTarget = "list";
+                fetchHubListNetwork();
             }
-            // disk miss → live fetch; hubReadTarget stays set so the
-            // response is routed back to the right handler
-            fetchHubListNetwork();
         } else {
             if (parsed) {
-                root.hubReadTarget = "";
                 applyHubBuild(target, parsed);
-                return;
+            } else {
+                root.hubNetTarget = target;
+                fetchHubBuildNetwork(target);
             }
-            fetchHubBuildNetwork(target);
         }
+        dequeueHubRead();
     }
 
     function hubFetch(url) {
@@ -971,7 +999,7 @@ Panel {
     }
 
     function onHubListHtml(raw) {
-        root.hubReadTarget = "";
+        root.hubNetTarget = "";
         root.hubLoading = false;
         var capped = String(raw || "");
         if (capped.length > root.maxDetailBytes)
@@ -991,8 +1019,8 @@ Panel {
     }
 
     function onHubBuildHtml(raw) {
-        var id = root.hubReadTarget;
-        root.hubReadTarget = "";
+        var id = root.hubNetTarget;
+        root.hubNetTarget = "";
         if (id === "" || id === "list")
             return;
         var capped = String(raw || "");
