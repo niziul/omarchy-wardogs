@@ -108,6 +108,25 @@ function parseSlots(t) {
       price: unescapePrice(firstRe(t.slice(m.index, m.index + 1600), /"children":"(\$\$[\d,]+)"/))
     })
   }
+  // The site labels backpack contents "Traversal" only for some builds;
+  // others group every pack item under "Storage". Normalize so the layout
+  // sees one shape: the backpack stays the Storage card, the rest of the
+  // run becomes Traversal (board items).
+  var hasTraversal = slots.some(function (sl) {
+    return sl.section === "Traversal"
+  })
+  if (!hasTraversal) {
+    var seenBackpack = false
+    slots.forEach(function (sl) {
+      if (sl.section !== "Storage")
+        return
+      if (!seenBackpack && /backpack|bpak/.test(String(sl.itemId))) {
+        seenBackpack = true
+        return
+      }
+      sl.section = "Traversal"
+    })
+  }
   return slots
 }
 
@@ -137,7 +156,8 @@ function parseHubBuild(html) {
     weight: unescapePrice(firstRe(t, /"weightKg":([\d.]+)/)),
     itemsCarried: statByLabel(t, "Pack"),
     board: parseBoard(t),
-    slots: parseSlots(t)
+    slots: parseSlots(t),
+    v: CACHE_VERSION
   }
 }
 
@@ -235,6 +255,11 @@ function filterBuilds(builds, query, role, sort) {
 // Turn a list row into a compare-sheet pseudo detail. Seeding this into the
 // caller's detail cache makes a build-vs-build compare resolve instantly
 // from the card data — no /database fetch (which wouldn't know build ids).
+// Bump when a parse-output shape changes: cached hub JSON stamped with an
+// older version is discarded on read and refetched, so builds parsed by
+// previous code never render with stale slot shapes.
+var CACHE_VERSION = 3
+
 // Only Basics-schema numbers are produced; item stat groups stay hidden.
 function buildToDetail(b) {
   if (!b) return null
@@ -253,6 +278,7 @@ function buildToDetail(b) {
 
 if (typeof module !== "undefined") {
   module.exports = {
+    CACHE_VERSION: CACHE_VERSION,
     flightChunks: flightChunks,
     chunkOf: chunkOf,
     parseHubList: parseHubList,

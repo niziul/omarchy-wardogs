@@ -123,6 +123,7 @@ Panel {
     property string hubReadTarget: ""      // "list" | build id whose disk read is in flight
     property var hubReadQueue: []          // cache reads waiting their turn (shared proc)
     property string hubNetTarget: ""       // "list" | build id whose live fetch is in flight
+    property string hubPendingFetch: ""    // deferred miss, kicked when the slot frees
     readonly property string hubDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/hub"
     property string hubQuery: ""           // pinned search field
     property string hubRole: ""            // pinned role chip ("" = all)
@@ -1002,17 +1003,13 @@ Panel {
                 // loading flag up so the list reads "Loading hub…" instead
                 // of flashing "No builds match."
                 root.hubLoading = true;
-                if (root.hubNetTarget === "") {
-                    root.hubNetTarget = "list";
-                    fetchHubListNetwork();
-                }
+                queueHubFetch("list");
             }
         } else {
             if (parsed && parsed.v === Hub.CACHE_VERSION) {
                 applyHubBuild(target, parsed);
-            } else if (root.hubNetTarget === "") {
-                root.hubNetTarget = target;
-                fetchHubBuildNetwork(target);
+            } else {
+                queueHubFetch(target);
             }
         }
         dequeueHubRead();
@@ -1031,6 +1028,30 @@ Panel {
 
     function fetchHubBuildNetwork(id) {
         hubFetch("https://wardogs.zone/loadouts/hub/" + id);
+    }
+
+    function queueHubFetch(target) {
+        if (root.hubNetTarget !== "") {
+            root.hubPendingFetch = target;
+            return;
+        }
+        root.hubNetTarget = target;
+        if (target === "list")
+            fetchHubListNetwork();
+        else
+            fetchHubBuildNetwork(target);
+    }
+
+    function kickHubPending() {
+        if (root.hubPendingFetch === "" || root.hubNetTarget !== "")
+            return;
+        var t = root.hubPendingFetch;
+        root.hubPendingFetch = "";
+        root.hubNetTarget = t;
+        if (t === "list")
+            fetchHubListNetwork();
+        else
+            fetchHubBuildNetwork(t);
     }
 
     function refreshHubBuild(id) {
@@ -1063,6 +1084,7 @@ Panel {
             root.hubListFailed = true;
             root.hubError = builds.length === 0 && root.hubBuilds.length === 0 ? "Offline — can't reach the loadout hub." : "";
         }
+        kickHubPending();
     }
 
     function onHubBuildHtml(raw) {
@@ -1083,6 +1105,7 @@ Panel {
         } else if (root.hubBuild === null || root.hubBuildId !== id) {
             root.hubError = "Could not load this build — open it on the site instead.";
         }
+        kickHubPending();
     }
 
     // --- stats prefetch -----------------------------------------------------
