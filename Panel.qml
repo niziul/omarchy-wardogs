@@ -991,21 +991,26 @@ Panel {
             parsed = null;
         }
         if (target === "list") {
-            root.hubLoading = false;
             if (parsed && parsed.v === Hub.CACHE_VERSION && parsed.builds) {
+                root.hubLoading = false;
                 root.hubBuilds = parsed.builds;
                 root.hubBuilds.forEach(function (b) {
                     requestIcon(b.iconId);
                 });
             } else {
-                // disk miss → live fetch; hubNetTarget routes the response
-                root.hubNetTarget = "list";
-                fetchHubListNetwork();
+                // disk miss (or pre-versioning cache) → live fetch; keep the
+                // loading flag up so the list reads "Loading hub…" instead
+                // of flashing "No builds match."
+                root.hubLoading = true;
+                if (root.hubNetTarget === "") {
+                    root.hubNetTarget = "list";
+                    fetchHubListNetwork();
+                }
             }
         } else {
             if (parsed && parsed.v === Hub.CACHE_VERSION) {
                 applyHubBuild(target, parsed);
-            } else {
+            } else if (root.hubNetTarget === "") {
                 root.hubNetTarget = target;
                 fetchHubBuildNetwork(target);
             }
@@ -1398,7 +1403,9 @@ Panel {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
-                if (root.hubReadTarget === "list")
+                // route by the fetch target — hubReadTarget tracks cache
+                // reads and may already point at the next queued file
+                if (root.hubNetTarget === "list")
                     root.onHubListHtml(text);
                 else
                     root.onHubBuildHtml(text);
