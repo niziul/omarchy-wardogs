@@ -115,6 +115,7 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         radius: Style.space(3)
+                        radius: 0
                         color: card.hot ? Style.hoverFillFor(hp.fg, hp.accentColor) : "transparent"
                         border.width: 1
                         border.color: card.hot ? hp.accentColor : Qt.rgba(hp.fg.r, hp.fg.g, hp.fg.b, 0.15)
@@ -349,6 +350,7 @@ Item {
                             Rectangle {
                                 anchors.fill: parent
                                 radius: Style.space(3)
+                                radius: 0
                                 color: slotRow.hot ? Style.hoverFillFor(hp.fg, hp.accentColor) : "transparent"
                                 border.width: 1
                                 border.color: slotRow.hot ? hp.accentColor : "transparent"
