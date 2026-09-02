@@ -420,6 +420,18 @@ function siteLinks() {
   return SITE_LINKS;
 }
 
+// Maps offered when the toolbar's maps icon is clicked; the chooser opens
+// https://wardogs.zone/maps/<id>
+var MAPS = [
+  { id: "kavkazi", label: "Kavkazi" },
+  { id: "europe", label: "Europe" },
+  { id: "northamerica", label: "North America" },
+];
+
+function maps() {
+  return MAPS;
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     parseIndex: parseIndex,
@@ -449,5 +461,7 @@ if (typeof module !== "undefined") {
     bySubcategory: bySubcategory,
     releaseCountdown: releaseCountdown,
     siteLinks: siteLinks,
+    maps: maps,
+    MAPS: MAPS,
   };
 }

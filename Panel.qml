@@ -94,6 +94,7 @@ Panel {
     property var compareA: null            // first marked row {id,name,...}
     property var compareB: null            // second marked row
     property bool compareMode: false       // compare view is the visible body
+    property bool mapChooserVisible: false // maps icon → choose a region
     property var compareCache: ({})        // id -> normalized detail | false (failed once)
     property string compareFetchId: ""     // id being read from the disk cache
     property var compareFetchQueue: []     // [id] disk reads waiting their turn
@@ -1694,26 +1695,6 @@ Panel {
         }
     }
 
-    // TEMP DEBUG: open hub build sheet for screenshots. Remove after.
-    IpcHandler {
-        target: "niziul.wardogs.hubshot"
-        function open() {
-            root.open();
-            root.openHub();
-            root.openHubBuild("ac8ef1364c");
-        }
-        function dbg() {
-            var b = root.hubBuild;
-            var counts = {};
-            if (b && b.slots) b.slots.forEach(function (s) { counts[s.section] = (counts[s.section] || 0) + 1; });
-            console.log("[hubdbg] build", b === null ? "null" : "obj", "| slotSections", JSON.stringify(counts));
-            return "ok";
-        }
-        function scroll() {
-            winScroller.contentY = 0;
-        }
-    }
-
     // The free-floating overlay window (left/middle click on the bar widget).
     PanelWindow {
         id: taskWindow
@@ -1731,6 +1712,8 @@ Panel {
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
         onVisibleChanged: {
+            if (!visible)
+                root.mapChooserVisible = false;
             if (visible)
                 Qt.callLater(function () {
                     if (root.opened)
@@ -1754,6 +1737,10 @@ Panel {
             focus: true
 
             Keys.onEscapePressed: {
+                if (root.mapChooserVisible) {
+                    root.mapChooserVisible = false;
+                    return;
+                }
                 if (root.hubMode && root.hubBuildId !== "") {
                     closeHubBuild();
                 } else if (root.settingsMode || root.newsMode || root.compareMode || root.hubMode)
@@ -1934,7 +1921,11 @@ Panel {
                                 fontFamily: root.fontFamily
                                 cornerRadius: root.cornerRadius
                                 onOpenRequested: function (url) {
-                                    root.openItem(url);
+                                    if (String(url).indexOf("https://wardogs.zone/maps") === 0) {
+                                        root.mapChooserVisible = true;
+                                    } else {
+                                        root.openItem(url);
+                                    }
                                     winKeys.forceActiveFocus();
                                 }
                             }
@@ -2032,7 +2023,7 @@ Panel {
                             }
 
                             Button {
-                                visible: root.settingsMode || root.newsMode || root.compareMode || root.hubMode
+                                visible: root.settingsMode || root.newsMode || root.compareMode
                                 radius: root.cornerRadius
                                 text: "Back"
                                 tooltipText: "Back to armory"
@@ -2717,6 +2708,104 @@ Panel {
                         font.family: root.fontFamily
                         font.pixelSize: Style.font.caption
                         wrapMode: Text.WordWrap
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+            }
+        }
+
+        // Map chooser: the toolbar's maps icon opens this instead of a URL,
+        // so the map region is a real choice (scrim click or esc cancels).
+        Rectangle {
+            anchors.fill: parent
+            visible: root.mapChooserVisible
+            color: Qt.rgba(0, 0, 0, 0.55)
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.mapChooserVisible = false
+            }
+
+            Rectangle {
+                width: Style.space(280)
+                height: mapCol.implicitHeight + Style.space(24)
+                anchors.centerIn: parent
+                color: Color.popups.background
+                border.width: 1
+                border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.3)
+
+                ColumnLayout {
+                    id: mapCol
+                    anchors.fill: parent
+                    anchors.margins: Style.space(12)
+                    spacing: Style.space(6)
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "CHOOSE A MAP"
+                        color: root.fg
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        font.letterSpacing: 1
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    Repeater {
+                        model: Model.maps()
+
+                        delegate: Rectangle {
+                            id: mapRow
+                            required property var modelData
+
+                            Layout.fillWidth: true
+                            implicitHeight: Style.space(32)
+                            radius: 0
+                            color: mapRow.hovered ? Style.hoverFillFor(root.fg, root.accentColor) : "transparent"
+                            border.width: 1
+                            border.color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, mapRow.hovered ? 0.4 : 0.15)
+
+                            property bool hovered: false
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: Style.space(10)
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: mapRow.modelData.label
+                                color: root.fg
+                                font.family: root.fontFamily
+                                font.pixelSize: Style.font.caption
+                            }
+
+                            Text {
+                                anchors.right: parent.right
+                                anchors.rightMargin: Style.space(10)
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "\uF14C"
+                                color: root.dim
+                                font.family: root.fontFamily
+                                font.pixelSize: Style.font.caption
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.mapChooserVisible = false;
+                                    root.openItem("https://wardogs.zone/maps/" + mapRow.modelData.id);
+                                }
+                                hoverEnabled: true
+                                onContainsMouseChanged: mapRow.hovered = containsMouse
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "esc to cancel"
+                        color: root.dim
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
                         horizontalAlignment: Text.AlignHCenter
                     }
                 }
