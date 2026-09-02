@@ -2370,7 +2370,16 @@ Panel {
                                     delegate: ItemTile {
                                         required property var modelData
                                         required property int index
-                                        selected: root.keyboardMode && index === root.winCursor
+                                        selected: index === root.winCursor
+                                        onHoveredChanged: {
+                                            // hover and keyboard share the one
+                                            // cursor, so an input lights exactly
+                                            // one tile
+                                            if (hovered) {
+                                                root.winCursor = index;
+                                                root.keyboardMode = false;
+                                            }
+                                        }
                                         name: modelData.name
                                         typeText: modelData.type
                                         caliberText: modelData.caliber

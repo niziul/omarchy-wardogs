@@ -28,10 +28,12 @@ BorderSurface {
 
     readonly property color accentColor: Color.accent
     readonly property color cashColor: "#4ade80"
-    readonly property bool hot: hovered || selected
+    // One focus at a time: `selected` (the shared cursor) is the only lit
+    // state — hover just moves the cursor, it never paints a second highlight
+    readonly property bool hot: selected
 
-    color: selected ? Style.selectedFillFor(fg, accentColor) : hovered ? Style.hoverFillFor(fg, accentColor) : "transparent"
-    borderSpec: selected ? Border.controlSpec("selected", fg, accentColor) : hovered ? Border.controlSpec("hover-cursor", fg, accentColor) : Border.controlSpec("normal", fg, accentColor)
+    color: selected ? Style.selectedFillFor(fg, accentColor) : "transparent"
+    borderSpec: selected ? Border.controlSpec("selected", fg, accentColor) : Border.controlSpec("normal", fg, accentColor)
     radius: Style.cornerRadius
 
     implicitHeight: Style.space(212)
