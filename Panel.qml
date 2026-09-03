@@ -2615,39 +2615,64 @@ Panel {
 
                                         // window size override: 0 keeps the
                                         // adaptive sizing
-                                        RowLayout {
+                                        ColumnLayout {
                                             Layout.fillWidth: true
-                                            spacing: Style.space(8)
+                                            spacing: Style.space(4)
 
-                                            NumberField {
-                                                property string settingKey: "windowWidth"
-                                                label: "Width (0 = auto)"
-                                                value: Number(root.draftValue("windowWidth", 0))
-                                                from: 0
-                                                to: 7680
-                                                stepSize: 40
-                                                Layout.fillWidth: true
-                                                foreground: root.fg
-                                                accent: Color.accent
-                                                fontFamily: root.fontFamily
-                                                onModified: function (value) {
-                                                    root.setDraftValue("windowWidth", value);
-                                                }
+                                            Text {
+                                                text: "Window size"
+                                                color: root.dim
+                                                font.family: root.fontFamily
+                                                font.pixelSize: Style.font.caption
                                             }
 
-                                            NumberField {
-                                                property string settingKey: "windowHeight"
-                                                label: "Height (0 = auto)"
-                                                value: Number(root.draftValue("windowHeight", 0))
-                                                from: 0
-                                                to: 2160
-                                                stepSize: 40
+                                            Text {
                                                 Layout.fillWidth: true
-                                                foreground: root.fg
-                                                accent: Color.accent
-                                                fontFamily: root.fontFamily
-                                                onModified: function (value) {
-                                                    root.setDraftValue("windowHeight", value);
+                                                text: "0 = auto (fills the screen minus margins, height up to 70%)"
+                                                color: root.dim
+                                                font.family: root.fontFamily
+                                                font.pixelSize: Style.font.bodySmall
+                                                opacity: 0.8
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: Style.space(12)
+
+                                                NumberField {
+                                                    property string settingKey: "windowWidth"
+                                                    label: "Width"
+                                                    value: Number(root.draftValue("windowWidth", 0))
+                                                    from: 0
+                                                    to: 7680
+                                                    stepSize: 40
+                                                    fieldWidth: parent.width / 2 - Style.space(6)
+                                                    Layout.fillWidth: true
+                                                    foreground: root.fg
+                                                    accent: Color.accent
+                                                    fontFamily: root.fontFamily
+                                                    field.locale: Qt.locale("C")
+                                                    onModified: function (value) {
+                                                        root.setDraftValue("windowWidth", value);
+                                                    }
+                                                }
+
+                                                NumberField {
+                                                    property string settingKey: "windowHeight"
+                                                    label: "Height"
+                                                    value: Number(root.draftValue("windowHeight", 0))
+                                                    from: 0
+                                                    to: 2160
+                                                    stepSize: 40
+                                                    fieldWidth: parent.width / 2 - Style.space(6)
+                                                    Layout.fillWidth: true
+                                                    foreground: root.fg
+                                                    accent: Color.accent
+                                                    fontFamily: root.fontFamily
+                                                    field.locale: Qt.locale("C")
+                                                    onModified: function (value) {
+                                                        root.setDraftValue("windowHeight", value);
+                                                    }
                                                 }
                                             }
                                         }
