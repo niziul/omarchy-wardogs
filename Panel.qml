@@ -99,12 +99,12 @@ Panel {
     // the card sizes itself from settings (default 1920×840, clamped to the
     // screen at draw time)
     readonly property int windowBoxW: {
-        var v = Number(root.settings ? root.settings.windowWidth : undefined);
-        return isFinite(v) && v >= 600 ? Math.round(v) : 1920;
+        var v = Number(root.settings ? root.settings.windowWidth : 0);
+        return isFinite(v) && v >= 600 ? Math.round(v) : 0;
     }
     readonly property int windowBoxH: {
-        var v = Number(root.settings ? root.settings.windowHeight : undefined);
-        return isFinite(v) && v >= 400 ? Math.round(v) : 840;
+        var v = Number(root.settings ? root.settings.windowHeight : 0);
+        return isFinite(v) && v >= 400 ? Math.round(v) : 0;
     }
     property var compareCache: ({})        // id -> normalized detail | false (failed once)
     property string compareFetchId: ""     // id being read from the disk cache
@@ -580,10 +580,13 @@ Panel {
         var next = cloneObject(source, {}) || {};
         var interval = Number(next.refreshIntervalSec === undefined || next.refreshIntervalSec === null ? 300 : next.refreshIntervalSec);
         next.refreshIntervalSec = Math.round(clamp(isFinite(interval) ? interval : 300, 60, 86400));
-        var ww = Number(next.windowWidth === undefined || next.windowWidth === null ? 1920 : next.windowWidth);
-        next.windowWidth = Math.round(clamp(isFinite(ww) ? ww : 1920, 600, 7680));
-        var wh = Number(next.windowHeight === undefined || next.windowHeight === null ? 840 : next.windowHeight);
-        next.windowHeight = Math.round(clamp(isFinite(wh) ? wh : 840, 400, 2160));
+        // 0 = adaptive (old sw−80 / 70%-of-screen sizing)
+        var ww = Number(next.windowWidth === undefined || next.windowWidth === null ? 0 : next.windowWidth);
+        ww = Math.round(isFinite(ww) ? ww : 0);
+        next.windowWidth = ww === 0 ? 0 : Math.round(clamp(ww, 600, 7680));
+        var wh = Number(next.windowHeight === undefined || next.windowHeight === null ? 0 : next.windowHeight);
+        wh = Math.round(isFinite(wh) ? wh : 0);
+        next.windowHeight = wh === 0 ? 0 : Math.round(clamp(wh, 400, 2160));
         next.alwaysShow = next.alwaysShow !== false;
         next.notifyOnNewVersion = next.notifyOnNewVersion !== false;
         next.notifyOnNewNews = next.notifyOnNewNews !== false;
@@ -1916,8 +1919,11 @@ Panel {
                 // where a 1px line anti-aliases across two device rows. Round both
                 // the size and the centered position to keep borders crisp.
                 anchors.centerIn: parent
-                width: Math.round(Math.max(Style.space(500), Math.min(root.windowBoxW, sw - Style.space(80))))
-                height: Math.round(Math.max(Style.space(420), Math.min(root.windowBoxH, sh - Style.space(80))))
+                // 0 = adaptive: width fills the screen minus margins, height
+                // caps at 70% — an explicit settings override clamps to the
+                // screen instead of replacing the floor
+                width: Math.round(Math.max(Style.space(500), root.windowBoxW > 0 ? Math.min(root.windowBoxW, sw - Style.space(80)) : sw - Style.space(80)))
+                height: Math.round(Math.max(Style.space(420), root.windowBoxH > 0 ? Math.min(root.windowBoxH, sh - Style.space(80)) : Math.min(sh * 0.7, sh - Style.space(80))))
                 x: Math.round((parent.width - width) / 2)
                 y: Math.round((parent.height - height) / 2)
                 color: Color.popups.background
@@ -2604,6 +2610,45 @@ Panel {
                                             fontFamily: root.fontFamily
                                             onModified: function (value) {
                                                 root.setDraftValue("refreshIntervalSec", value);
+                                            }
+                                        }
+
+                                        // window size override: 0 keeps the
+                                        // adaptive sizing
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Style.space(8)
+
+                                            NumberField {
+                                                property string settingKey: "windowWidth"
+                                                label: "Width (0 = auto)"
+                                                value: Number(root.draftValue("windowWidth", 0))
+                                                from: 0
+                                                to: 7680
+                                                stepSize: 40
+                                                Layout.fillWidth: true
+                                                foreground: root.fg
+                                                accent: Color.accent
+                                                fontFamily: root.fontFamily
+                                                onModified: function (value) {
+                                                    root.setDraftValue("windowWidth", value);
+                                                }
+                                            }
+
+                                            NumberField {
+                                                property string settingKey: "windowHeight"
+                                                label: "Height (0 = auto)"
+                                                value: Number(root.draftValue("windowHeight", 0))
+                                                from: 0
+                                                to: 2160
+                                                stepSize: 40
+                                                Layout.fillWidth: true
+                                                foreground: root.fg
+                                                accent: Color.accent
+                                                fontFamily: root.fontFamily
+                                                onModified: function (value) {
+                                                    root.setDraftValue("windowHeight", value);
+                                                }
                                             }
                                         }
 
