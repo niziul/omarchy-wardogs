@@ -128,6 +128,7 @@ Panel {
     property var hubReadQueue: []          // cache reads waiting their turn (shared proc)
     property string hubNetTarget: ""       // "list" | build id whose live fetch is in flight
     property string hubPendingFetch: ""    // deferred miss, kicked when the slot frees
+    property real hubListFetchedAt: 0      // last live list fetch (rate-limits revalidate)
     readonly property string hubDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/hub"
     property string hubQuery: ""           // pinned search field
     property string hubRole: ""            // pinned role chip ("" = all)
@@ -214,6 +215,14 @@ Panel {
             healthProc.running = true;
         if (!newsProc.running)
             newsProc.running = true;
+        if (root.hubMode) {
+            // the hub is cache-first everywhere — force both layers to
+            // revalidate against the site
+            root.hubListFetchedAt = 0;
+            fetchHubList();
+            if (root.hubBuildId !== "")
+                queueHubFetch(root.hubBuildId);
+        }
     }
 
     function onIndex(raw) {
@@ -403,8 +412,9 @@ Panel {
         compareMode = false;
         open();
         focusWinKeys();
-        if (root.hubBuilds.length === 0 && !root.hubLoading && !root.hubListFailed)
-            fetchHubList();
+        // the cached list renders from the read below; a live revalidate
+        // follows so newly published builds show up without a restart
+        fetchHubList();
     }
 
     // The free-floating overlay window (left/middle click on the bar pill, or IPC).
@@ -980,6 +990,13 @@ Panel {
                 root.hubBuilds.forEach(function (b) {
                     requestIcon(b.iconId);
                 });
+                // stale-while-revalidate: keep showing the cache, but check
+                // the site for newly published builds (at most once a minute)
+                var now = Date.now();
+                if (now - root.hubListFetchedAt > 60000) {
+                    root.hubListFetchedAt = now;
+                    queueHubFetch("list");
+                }
             } else {
                 // disk miss (or pre-versioning cache) → live fetch; keep the
                 // loading flag up so the list reads "Loading hub…" instead
@@ -1053,6 +1070,7 @@ Panel {
             capped = capped.substring(0, root.maxDetailBytes);
         var builds = Hub.parseHubList(capped);
         if (builds.length > 0) {
+            root.hubListFetchedAt = Date.now();
             root.hubBuilds = builds;
             hubCacheView.path = root.hubCachePath("list");
             hubCacheView.setText(JSON.stringify({
