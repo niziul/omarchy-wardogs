@@ -205,7 +205,16 @@ function parseHubList(html) {
       items: wi ? wi[2] : ""
     })
   }
-  return builds
+  // pages can overlap around publish-time; keep the first occurrence
+  var seen = {}
+  var unique = []
+  for (var i = 0; i < builds.length; i++) {
+    var id = builds[i].id
+    if (seen[id]) continue
+    seen[id] = true
+    unique.push(builds[i])
+  }
+  return unique
 }
 
 // The roles the hub list can be filtered by (site capitalization).
