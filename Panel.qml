@@ -95,6 +95,17 @@ Panel {
     property var compareB: null            // second marked row
     property bool compareMode: false       // compare view is the visible body
     property bool mapChooserVisible: false // maps icon → choose a region
+    // The window box: layer-shell surfaces can't be Hyprland-windowruled, so
+    // the card sizes itself from settings (default 1920×840, clamped to the
+    // screen at draw time)
+    readonly property int windowBoxW: {
+        var v = Number(root.settings ? root.settings.windowWidth : undefined);
+        return isFinite(v) && v >= 600 ? Math.round(v) : 1920;
+    }
+    readonly property int windowBoxH: {
+        var v = Number(root.settings ? root.settings.windowHeight : undefined);
+        return isFinite(v) && v >= 400 ? Math.round(v) : 840;
+    }
     property var compareCache: ({})        // id -> normalized detail | false (failed once)
     property string compareFetchId: ""     // id being read from the disk cache
     property var compareFetchQueue: []     // [id] disk reads waiting their turn
@@ -569,6 +580,10 @@ Panel {
         var next = cloneObject(source, {}) || {};
         var interval = Number(next.refreshIntervalSec === undefined || next.refreshIntervalSec === null ? 300 : next.refreshIntervalSec);
         next.refreshIntervalSec = Math.round(clamp(isFinite(interval) ? interval : 300, 60, 86400));
+        var ww = Number(next.windowWidth === undefined || next.windowWidth === null ? 1920 : next.windowWidth);
+        next.windowWidth = Math.round(clamp(isFinite(ww) ? ww : 1920, 600, 7680));
+        var wh = Number(next.windowHeight === undefined || next.windowHeight === null ? 840 : next.windowHeight);
+        next.windowHeight = Math.round(clamp(isFinite(wh) ? wh : 840, 400, 2160));
         next.alwaysShow = next.alwaysShow !== false;
         next.notifyOnNewVersion = next.notifyOnNewVersion !== false;
         next.notifyOnNewNews = next.notifyOnNewNews !== false;
@@ -1732,6 +1747,11 @@ Panel {
         function close() {
             root.close();
         }
+        function size(w: int, h: int) {
+            root.setDraftValue("windowWidth", w);
+            root.setDraftValue("windowHeight", h);
+            root.saveSettings();
+        }
     }
 
     // The free-floating overlay window (left/middle click on the bar widget).
@@ -1896,8 +1916,8 @@ Panel {
                 // where a 1px line anti-aliases across two device rows. Round both
                 // the size and the centered position to keep borders crisp.
                 anchors.centerIn: parent
-                width: Math.round(Math.max(Style.space(500), sw - Style.space(80)))
-                height: Math.round(Math.max(Style.space(420), Math.min(sh * 0.7, sh - Style.space(80))))
+                width: Math.round(Math.max(Style.space(500), Math.min(root.windowBoxW, sw - Style.space(80))))
+                height: Math.round(Math.max(Style.space(420), Math.min(root.windowBoxH, sh - Style.space(80))))
                 x: Math.round((parent.width - width) / 2)
                 y: Math.round((parent.height - height) / 2)
                 color: Color.popups.background
