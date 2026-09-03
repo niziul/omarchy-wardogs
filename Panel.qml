@@ -1026,16 +1026,21 @@ Panel {
         // shell loop until a page carries no build entries (the site also
         // links to empty pages, so the buildId probe is the real stop signal)
         var sh = [
-            "i=1; out=\"\"",
-            "while [ $i -le 12 ]; do",
-            "  if [ $i -eq 1 ]; then url=\"$1\"; else url=\"$1?page=$i\"; fi",
+            "i=1",
+            "out=\"\"",
+            "while [ $i -le 12 ]",
+            "do",
+            "  if [ $i -eq 1 ]",
+            "  then url=\"$1\"",
+            "  else url=\"$1?page=$i\"",
+            "  fi",
             "  p=$(curl -fsS --max-time 8 \"$url\") || break",
             "  case \"$p\" in *buildId*) out=\"$out$p\";; *) break;; esac",
             "  i=$((i+1))",
             "done",
             "mkdir -p \"$2\"",
             "printf '%s' \"$out\""
-        ].join("; ");
+        ].join("\n");
         hubFetchProc.command = ["sh", "-c", sh, "sh", "https://wardogs.zone/loadouts/hub", root.hubDir];
         hubFetchProc.running = true;
     }
