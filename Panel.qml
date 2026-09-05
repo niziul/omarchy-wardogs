@@ -136,7 +136,9 @@ Panel {
     property string baseError: ""
     property var baseDetailCache: ({})     // id -> parsed detail (stamped Cache v)
     property real baseListFetchedAt: 0
-    property string baseNetTarget: ""      // "list" | base id in flight
+    property string baseSort: "hot"          // hot | top | new (server-side ordering)
+    property string baseQuery: ""            // pinned search (server-side filter)
+    property string baseNetTarget: ""      // "list[<variant>]" | base id in flight
     property string basePendingFetch: ""   // deferred miss kicked when the slot frees
     property string baseReadTarget: ""     // "list" | id whose disk read is in flight
     property var baseReadQueue: []         // reads waiting their turn
@@ -180,11 +182,71 @@ Panel {
     // versioned cache hit applies instantly and stale-while-revalidates
     // (rate-limited), a miss or expired stamp triggers a live fetch routed
     // through baseNetTarget — list fetches walk every paginated page.
-    function fetchBaseList() {
+    function baseListKey() {
+        // Self-describing cache key: "list" (hot, no query — legacy file) or
+        // "list-" + sort + "_q_" + hex(query). The fetch URL is always
+        // rebuilt from the key, so a variant's data never lands under the
+        // wrong cache file.
+        if (root.baseSort === "hot" && root.baseQuery === "")
+            return "list";
+        var q = root.baseQuery;
+        var hex = "";
+        for (var i = 0; i < q.length; i++) {
+            var h = q.charCodeAt(i).toString(16);
+            while (h.length < 4)
+                h = "0" + h;
+            hex += h;
+        }
+        var kind = root.baseSort === "hot" ? "" : "-" + root.baseSort;
+        return "list" + kind + (q === "" ? "" : "_q_" + hex);
+    }
+
+    function baseListUrlForKey(key) {
+        var u = "https://wardogs.zone/loadouts/base/hub";
+        var sort = "hot";
+        var hex = "";
+        var qa = key.indexOf("_q_");
+        if (qa !== -1) {
+            var head = key.substring(0, qa);   // "list" or "list-<sort>"
+            var dash = head.indexOf("-");
+            if (dash !== -1)
+                sort = head.substring(dash + 1);
+            hex = key.substring(qa + 3);
+        } else {
+            var tail = key.substring(key.indexOf("-") + 1);
+            if (tail !== "" && tail !== key)
+                sort = tail;
+        }
+        var q = "";
+        for (var i = 0; i + 3 < hex.length; i += 4)
+            q += String.fromCharCode(parseInt(hex.substring(i, i + 4), 16));
+        var parts = [];
+        if (sort !== "hot")
+            parts.push("sort=" + sort);
+        if (q !== "")
+            parts.push("q=" + encodeURIComponent(q));
+        return parts.length ? u + "?" + parts.join("&") : u;
+    }
+
+    function setBaseSort(sort) {
+        if (root.baseSort === sort)
+            return;
+        console.log("[base] sort ->", sort);
+        root.baseSort = sort;
+        root.loadBaseList();
+    }
+
+    function loadBaseList() {
+        console.log("[base] load key", root.baseListKey());
         root.baseLoading = true;
         root.baseListFailed = false;
         root.baseError = "";
-        enqueueBaseRead("list");
+        root.baseCursor = 0;
+        enqueueBaseRead(root.baseListKey());
+    }
+
+    function fetchBaseList() {
+        root.loadBaseList();
     }
 
     function openBase() {
@@ -210,6 +272,7 @@ Panel {
     function openBaseBuild(id) {
         if (String(id || "") === "")
             return;
+        console.log("[base] open detail", id);
         root.baseBuildId = id;
         root.baseCursor = 0;
         root.baseError = "";
@@ -268,18 +331,18 @@ Panel {
         } catch (e) {
             parsed = null;
         }
-        if (target === "list") {
+        if (target.indexOf("list") === 0) {
             root.baseLoading = false;
             if (parsed && parsed.v === Base.CACHE_VERSION && parsed.builds) {
                 root.baseBuilds = parsed.builds;
                 var now = Date.now();
                 if (now - root.baseListFetchedAt > 60000) {
                     root.baseListFetchedAt = now;
-                    queueBaseFetch("list");
+                    queueBaseFetch(target);
                 }
             } else {
                 root.baseLoading = true;
-                queueBaseFetch("list");
+                queueBaseFetch(target);
             }
         } else {
             if (parsed && parsed.v === Base.CACHE_VERSION) {
@@ -300,8 +363,8 @@ Panel {
             return;
         }
         root.baseNetTarget = target;
-        if (target === "list")
-            fetchBaseListNetwork();
+        if (target.indexOf("list") === 0)
+            fetchBaseListNetwork(target);
         else
             fetchBaseBuildNetwork(target);
     }
@@ -312,31 +375,40 @@ Panel {
         var t = root.basePendingFetch;
         root.basePendingFetch = "";
         root.baseNetTarget = t;
-        if (t === "list")
-            fetchBaseListNetwork();
+        if (t.indexOf("list") === 0)
+            fetchBaseListNetwork(t);
         else
             fetchBaseBuildNetwork(t);
     }
 
     function onBaseListHtml(raw) {
+        var key = root.baseNetTarget;
         root.baseNetTarget = "";
         root.baseLoading = false;
+        if (key === "" || key.indexOf("list") !== 0)
+            return;
         var capped = String(raw || "");
         if (capped.length > root.maxBaseListBytes)
             capped = capped.substring(0, root.maxBaseListBytes);
         var builds = Base.dedupeBuilds(Base.parseBaseList(capped));
-        console.log("[base] list:", builds.length, "bases from", capped.length, "bytes");
+        console.log("[base] list:", key, builds.length, "bases from", capped.length, "bytes");
         if (builds.length > 0) {
-            root.baseListFetchedAt = Date.now();
-            root.baseBuilds = builds;
-            baseCacheView.path = root.baseCachePath("list");
+            baseCacheView.path = root.baseCachePath(key);
             baseCacheView.setText(JSON.stringify({
                         "v": Base.CACHE_VERSION,
                         "builds": builds
                     }));
-        } else {
-            root.baseListFailed = true;
-            root.baseError = baseBuilds.length === 0 && root.baseBuilds.length === 0 ? "Offline — can't reach the base hub." : "";
+        }
+        if (key === root.baseListKey()) {
+            if (builds.length > 0 || capped.length > 0) {
+                root.baseBuilds = builds;
+                root.baseListFetchedAt = Date.now();
+                root.baseListFailed = false;
+                root.baseError = "";
+            } else {
+                root.baseListFailed = true;
+                root.baseError = root.baseBuilds.length === 0 ? "Offline — can't reach the base hub." : "";
+            }
         }
         kickBasePending();
     }
@@ -344,7 +416,7 @@ Panel {
     function onBaseDetailHtml(raw) {
         var id = root.baseNetTarget;
         root.baseNetTarget = "";
-        if (id === "" || id === "list")
+        if (id === "" || id.indexOf("list") === 0)
             return;
         var build = Base.parseBaseDetail(String(raw || ""));
         console.log("[base] detail:", id, build ? (build.title + " · " + build.shapes.length + " shapes · " + build.manifest.length + " manifest") : "FAIL");
@@ -373,8 +445,9 @@ Panel {
     // The base hub pages, cli-looped like the loadout list: stop when a
     // fetched page carries no build entries (the site links to empty
     // trailing pages).
-    function fetchBaseListNetwork() {
-        console.log("[base] list fetch start");
+    function fetchBaseListNetwork(key) {
+        var url = root.baseListUrlForKey(key);
+        console.log("[base] list fetch start:", key, "-", url);
         // plans pack megabytes of SVG into the flight payload; text-only list
         // parsing needs just the SSR DOM (title/author/... + plan hrefs), so
         // each page lands in a file and awk cuts it at the first flight row
@@ -387,17 +460,21 @@ Panel {
             "do",
             "  if [ $i -eq 1 ]",
             "  then url=\"$1\"",
-            "  else url=\"$1?page=$i\"",
+            "  else",
+            "    case \"$1\" in",
+            "      *\\?*) url=\"$1&page=$i\" ;;",
+            "      *) url=\"$1?page=$i\" ;;",
+            "    esac",
             "  fi",
             "  curl -fsS --max-time 8 \"$url\" -o \"$2/p.html\" || break",
-            "  grep -q font-display \"$2/p.html\" || break",
             "  awk -v RS='self\.__next_f' 'NR==1{print; exit}' \"$2/p.html\" >> \"$_out\" || true",
+            "  grep -q 'href=\"/loadouts/base/hub/' \"$2/p.html\" || break",
             "  i=$((i+1))",
             "done",
             "rm -f \"$2/p.html\"",
             "cat \"$_out\""
         ].join("\n");
-        baseFetchProc.command = ["sh", "-c", sh, "sh", "https://wardogs.zone/loadouts/base/hub", root.baseDir];
+        baseFetchProc.command = ["sh", "-c", sh, "sh", url, root.baseDir];
         baseFetchProc.running = true;
     }
     function fetchBaseBuildNetwork(id) {
@@ -1183,6 +1260,7 @@ Panel {
 
     function baseActivate() {
         var list = root.baseBuilds;
+        console.log("[base] activate cursor", root.baseCursor, "of", list.length);
         if (root.baseCursor < list.length)
             openBaseBuild(list[root.baseCursor].id);
     }
@@ -1774,7 +1852,7 @@ Panel {
             waitForEnd: true
             onStreamFinished: {
                 // route by the fetch target (cache reads may have moved on)
-                if (root.baseNetTarget === "list")
+                if (root.baseNetTarget.indexOf("list") === 0)
                     root.onBaseListHtml(text);
                 else
                     root.onBaseDetailHtml(text);
@@ -2029,9 +2107,11 @@ Panel {
     IpcHandler {
         target: "niziul.wardogs.base"
         function open() {
+            console.log("[ipc] base open");
             root.openBase();
         }
         function openBase(id: string) {
+            console.log("[ipc] base openBase", id);
             root.open();
             root.openBase();
             root.openBaseBuild(id);
@@ -2039,6 +2119,23 @@ Panel {
         function back() {
             root.closeBaseBuild();
         }
+        function sort(value: string) {
+            console.log("[ipc] base sort", value);
+            if (value === "hot" || value === "new" || value === "top")
+                root.setBaseSort(value);
+        }
+        function search(text: string) {
+            console.log("[ipc] base search", text);
+            root.baseQuery = String(text || "");
+            baseFilterTimer.stop();
+            root.loadBaseList();
+        }
+    }
+
+    Timer {
+        id: baseFilterTimer
+        interval: 350
+        onTriggered: root.loadBaseList()
     }
 
     IpcHandler {
@@ -2183,7 +2280,13 @@ Panel {
                     else if (event.text === "/" || event.key === Qt.Key_Escape) {}
                     return;
                 } else if (root.baseMode) {
-                    // base hub: j/k (h/l) move the cursor, return opens
+                    // base hub: j/k (h/l) move the cursor, return opens,
+                    // / focuses the search bar
+                    if (event.text === "/" && root.baseBuildId === "") {
+                        baseSearchInput.forceActiveFocus();
+                        baseSearchInput.cursorPosition = baseSearchInput.text.length;
+                        return;
+                    }
                     if (event.key === Qt.Key_J || event.text === "j" || event.text === "l" || event.text === "L")
                         baseMove(1);
                     else if (event.key === Qt.Key_K || event.text === "k" || event.text === "h" || event.text === "H")
@@ -2700,6 +2803,117 @@ Panel {
                         }
                     }
 
+                    // Pinned base search + sort: mirrors the site's
+                    // Hot/Top/New row ("Search bases"); lives outside the
+                    // scroller like the hub filters. Queries hit the server
+                    // (debounced) and are cached per sort+query variant.
+                    RowLayout {
+                        visible: root.baseMode && root.baseBuildId === ""
+                        Layout.fillWidth: true
+                        spacing: Style.space(6)
+
+                        TextField {
+                            id: baseSearchInput
+                            Layout.fillWidth: true
+                            placeholderText: "Search bases by name, author, wall…"
+                            foreground: root.fg
+                            accent: Color.accent
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                            text: root.baseQuery
+                            onTextEdited: {
+                                root.baseQuery = baseSearchInput.text;
+                                baseFilterTimer.restart();
+                            }
+                            Keys.onEscapePressed: {
+                                root.baseQuery = "";
+                                baseSearchInput.text = "";
+                                winKeys.forceActiveFocus();
+                            }
+                            Keys.onUpPressed: {
+                                baseSearchInput.focus = false;
+                                root.baseMove(-1);
+                            }
+                            Keys.onDownPressed: {
+                                baseSearchInput.focus = false;
+                                root.baseMove(1);
+                            }
+                            Keys.onReturnPressed: {
+                                baseSearchInput.focus = false;
+                                root.baseActivate();
+                            }
+                            Keys.onEnterPressed: {
+                                baseSearchInput.focus = false;
+                                root.baseActivate();
+                            }
+                        }
+
+                        Button {
+                            visible: root.baseQuery !== ""
+                            radius: root.cornerRadius
+                            text: "\u2715"
+                            tooltipText: "Clear base search"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: {
+                                root.baseQuery = "";
+                                baseSearchInput.text = "";
+                                baseFilterTimer.stop();
+                                root.loadBaseList();
+                                baseSearchInput.forceActiveFocus();
+                            }
+                        }
+
+                        Button {
+                            text: "Hot"
+                            tooltipText: "Score blended with recency"
+                            radius: root.cornerRadius
+                            active: root.baseSort === "hot"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: root.setBaseSort("hot")
+                        }
+
+                        Button {
+                            text: "New"
+                            tooltipText: "Newest published first"
+                            radius: root.cornerRadius
+                            active: root.baseSort === "new"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: root.setBaseSort("new")
+                        }
+
+                        Button {
+                            text: "Top"
+                            tooltipText: "Highest scored first"
+                            radius: root.cornerRadius
+                            active: root.baseSort === "top"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(2)
+                            onClicked: root.setBaseSort("top")
+                        }
+
+                        Text {
+                            text: root.baseBuilds.length + " bases"
+                            color: root.dim
+                            font.family: root.fontFamily
+                            font.pixelSize: Style.font.caption
+                        }
+                    }
+
                     Flickable {
                         id: winScroller
                         Layout.fillWidth: true
@@ -2935,6 +3149,7 @@ Panel {
                                 cursor: root.baseCursor
                                 loading: root.baseLoading
                                 error: root.baseError
+                                query: root.baseQuery
                                 fg: root.fg
                                 dim: root.dim
                                 fontFamily: root.fontFamily

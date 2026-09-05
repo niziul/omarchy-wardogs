@@ -18,6 +18,7 @@ Item {
     property int cursor: 0
     property bool loading: false
     property string error: ""
+    property string query: ""               // pinned search (empty-state copy)
     property color fg: Qt.rgba(1, 1, 1, 0.9)
     property color dim: Qt.rgba(1, 1, 1, 0.62)
     property string fontFamily: ""
@@ -131,7 +132,7 @@ Item {
         Text {
             visible: bp.listMode && bp.builds.length === 0
             Layout.fillWidth: true
-            text: bp.loading ? "Loading base hub…" : (bp.error !== "" ? bp.error : "No bases published.")
+            text: bp.loading ? "Loading base hub…" : (bp.error !== "" ? bp.error : (bp.query !== "" ? "Nothing matches \"" + bp.query + "\"." : "No bases published."))
             color: bp.dim
             font.family: bp.fontFamily
             font.pixelSize: Style.font.caption
