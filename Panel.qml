@@ -21,6 +21,7 @@ import qs.Ui
     import "Details.js" as Details
     import "Compare.js" as Compare
     import "Hub.js" as Hub
+    import "Base.js" as Base
     import "components"
 
 Panel {
@@ -121,6 +122,33 @@ Panel {
         return d && d !== false ? d : null;
     }
 
+    // --- base hub ----------------------------------------------------------
+    // Published FOB plans from wardogs.zone/loadouts/base/hub: paginated
+    // list + per-base detail with a drawable plan shape set and a supply
+    // manifest (Base.js). Same cache-then-live pipeline as the loadout hub.
+    property bool baseMode: false
+    property var baseBuilds: []            // parsed list rows (Base.parseBaseList)
+    property string baseBuildId: ""        // "" = list, else detail for this id
+    property var baseBase: null            // parsed detail or null
+    property int baseCursor: 0
+    property bool baseLoading: false
+    property bool baseListFailed: false
+    property string baseError: ""
+    property var baseDetailCache: ({})     // id -> parsed detail (stamped Cache v)
+    property real baseListFetchedAt: 0
+    property string baseNetTarget: ""      // "list" | base id in flight
+    property string basePendingFetch: ""   // deferred miss kicked when the slot frees
+    property string baseReadTarget: ""     // "list" | id whose disk read is in flight
+    property var baseReadQueue: []         // reads waiting their turn
+    readonly property string baseDir: Quickshell.env("HOME") + "/.cache/wardogs-plugin/base"
+    // base list pages reach 3.4MB each packed with plan art — far above the
+    // 2MB detail cap, so the list carries its own generous ceiling
+    readonly property int maxBaseListBytes: 16777216
+
+    function baseCachePath(name) {
+        return root.baseDir + "/" + name + ".json";
+    }
+
     // --- loadout hub ----------------------------------------------------------
     // Published builds from wardogs.zone/loadouts/hub: list + per-build
     // detail, fetched live with a disk cache (hub/*.json) and last-good
@@ -147,6 +175,238 @@ Panel {
     readonly property var hubFiltered: Hub.filterBuilds(root.hubBuilds, root.hubQuery, root.hubRole, root.hubSort)
     readonly property var hubRoleOptions: Hub.hubRoles()
 
+    // --- base hub pipeline -----------------------------------------------------
+    // Cache-then-live like the loadout hub: reads queue on one process, a
+    // versioned cache hit applies instantly and stale-while-revalidates
+    // (rate-limited), a miss or expired stamp triggers a live fetch routed
+    // through baseNetTarget — list fetches walk every paginated page.
+    function fetchBaseList() {
+        root.baseLoading = true;
+        root.baseListFailed = false;
+        root.baseError = "";
+        enqueueBaseRead("list");
+    }
+
+    function openBase() {
+        baseMode = true;
+        settingsMode = false;
+        newsMode = false;
+        compareMode = false;
+        hubMode = false;
+        open();
+        focusWinKeys();
+        // cached list renders from the read; a live revalidate follows so
+        // newly published plans appear without a restart
+        fetchBaseList();
+    }
+
+    function closeBaseBuild() {
+        root.baseBuildId = "";
+        root.baseBase = null;
+        root.baseCursor = 0;
+        root.baseError = "";
+    }
+
+    function openBaseBuild(id) {
+        if (String(id || "") === "")
+            return;
+        root.baseBuildId = id;
+        root.baseCursor = 0;
+        root.baseError = "";
+        var hit = root.baseDetailCache[id];
+        if (hit !== undefined) {
+            root.baseBase = hit;
+            requestBaseIcons(hit);
+            queueBaseFetch(id);   // stale-while-revalidate like the list
+            return;
+        }
+        root.baseBase = null;
+        root.baseLoading = true;
+        enqueueBaseRead(id);
+    }
+
+    function requestBaseIcons(base) {
+        // plans draw as vector shapes — no icons to fetch; reserved for
+        // symmetry with the hub's icon kick
+    }
+
+    function enqueueBaseRead(target) {
+        if (root.baseReadTarget === target || root.baseReadQueue.indexOf(target) !== -1)
+            return;
+        if (root.baseReadTarget === "") {
+            startBaseRead(target);
+            return;
+        }
+        root.baseReadQueue = root.baseReadQueue.filter(function (t) {
+            return t !== target;
+        }).concat([target]);
+    }
+
+    function startBaseRead(target) {
+        root.baseReadTarget = target;
+        baseCacheReadProc.command = ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", root.baseCachePath(target)];
+        baseCacheReadProc.running = true;
+    }
+
+    function dequeueBaseRead() {
+        if (root.baseReadQueue.length === 0)
+            return;
+        var next = root.baseReadQueue[0];
+        root.baseReadQueue = root.baseReadQueue.slice(1);
+        startBaseRead(next);
+    }
+
+    function onBaseCacheRaw(raw) {
+        var target = root.baseReadTarget;
+        console.log("[base] cache read:", target, "bytes", String(raw || "").length);
+        root.baseReadTarget = "";
+        if (target === "")
+            return;
+        var parsed = null;
+        try {
+            parsed = JSON.parse(String(raw || "{}"));
+        } catch (e) {
+            parsed = null;
+        }
+        if (target === "list") {
+            root.baseLoading = false;
+            if (parsed && parsed.v === Base.CACHE_VERSION && parsed.builds) {
+                root.baseBuilds = parsed.builds;
+                var now = Date.now();
+                if (now - root.baseListFetchedAt > 60000) {
+                    root.baseListFetchedAt = now;
+                    queueBaseFetch("list");
+                }
+            } else {
+                root.baseLoading = true;
+                queueBaseFetch("list");
+            }
+        } else {
+            if (parsed && parsed.v === Base.CACHE_VERSION) {
+                applyBaseBuild(target, parsed);
+                root.baseLoading = false;
+                queueBaseFetch(target);
+            } else {
+                root.baseLoading = true;
+                queueBaseFetch(target);
+            }
+        }
+        dequeueBaseRead();
+    }
+
+    function queueBaseFetch(target) {
+        if (root.baseNetTarget !== "") {
+            root.basePendingFetch = target;
+            return;
+        }
+        root.baseNetTarget = target;
+        if (target === "list")
+            fetchBaseListNetwork();
+        else
+            fetchBaseBuildNetwork(target);
+    }
+
+    function kickBasePending() {
+        if (root.basePendingFetch === "" || root.baseNetTarget !== "")
+            return;
+        var t = root.basePendingFetch;
+        root.basePendingFetch = "";
+        root.baseNetTarget = t;
+        if (t === "list")
+            fetchBaseListNetwork();
+        else
+            fetchBaseBuildNetwork(t);
+    }
+
+    function onBaseListHtml(raw) {
+        root.baseNetTarget = "";
+        root.baseLoading = false;
+        var capped = String(raw || "");
+        if (capped.length > root.maxBaseListBytes)
+            capped = capped.substring(0, root.maxBaseListBytes);
+        var builds = Base.dedupeBuilds(Base.parseBaseList(capped));
+        console.log("[base] list:", builds.length, "bases from", capped.length, "bytes");
+        if (builds.length > 0) {
+            root.baseListFetchedAt = Date.now();
+            root.baseBuilds = builds;
+            baseCacheView.path = root.baseCachePath("list");
+            baseCacheView.setText(JSON.stringify({
+                        "v": Base.CACHE_VERSION,
+                        "builds": builds
+                    }));
+        } else {
+            root.baseListFailed = true;
+            root.baseError = baseBuilds.length === 0 && root.baseBuilds.length === 0 ? "Offline — can't reach the base hub." : "";
+        }
+        kickBasePending();
+    }
+
+    function onBaseDetailHtml(raw) {
+        var id = root.baseNetTarget;
+        root.baseNetTarget = "";
+        if (id === "" || id === "list")
+            return;
+        var build = Base.parseBaseDetail(String(raw || ""));
+        console.log("[base] detail:", id, build ? (build.title + " · " + build.shapes.length + " shapes · " + build.manifest.length + " manifest") : "FAIL");
+        if (build && build.title !== "") {
+            build.id = id;
+            applyBaseBuild(id, build);
+            baseCacheView.path = root.baseCachePath(id);
+            baseCacheView.setText(JSON.stringify(build));
+            root.baseError = "";
+        } else if (root.baseBase === null || root.baseBuildId !== id) {
+            root.baseError = "Could not load this base — open it on the site instead.";
+        }
+        root.baseLoading = false;
+        kickBasePending();
+    }
+
+    function applyBaseBuild(id, base) {
+        var cache = cloneObject(root.baseDetailCache, {});
+        cache[id] = base;
+        root.baseDetailCache = cache;
+        if (root.baseBuildId === id) {
+            root.baseBase = base;
+        }
+    }
+
+    // The base hub pages, cli-looped like the loadout list: stop when a
+    // fetched page carries no build entries (the site links to empty
+    // trailing pages).
+    function fetchBaseListNetwork() {
+        console.log("[base] list fetch start");
+        // plans pack megabytes of SVG into the flight payload; text-only list
+        // parsing needs just the SSR DOM (title/author/... + plan hrefs), so
+        // each page lands in a file and awk cuts it at the first flight row
+        // (no giant shell variables — they choke sh's pattern matching)
+        var sh = [
+            "i=1",
+            "_out=\"$2/out.html\"",
+            ": > \"$_out\"",
+            "while [ $i -le 8 ]",
+            "do",
+            "  if [ $i -eq 1 ]",
+            "  then url=\"$1\"",
+            "  else url=\"$1?page=$i\"",
+            "  fi",
+            "  curl -fsS --max-time 8 \"$url\" -o \"$2/p.html\" || break",
+            "  grep -q font-display \"$2/p.html\" || break",
+            "  awk -v RS='self\.__next_f' 'NR==1{print; exit}' \"$2/p.html\" >> \"$_out\" || true",
+            "  i=$((i+1))",
+            "done",
+            "rm -f \"$2/p.html\"",
+            "cat \"$_out\""
+        ].join("\n");
+        baseFetchProc.command = ["sh", "-c", sh, "sh", "https://wardogs.zone/loadouts/base/hub", root.baseDir];
+        baseFetchProc.running = true;
+    }
+    function fetchBaseBuildNetwork(id) {
+        // sh -c arg order: $0=sh $1=url $2=cache dir
+        baseFetchProc.command = ["sh", "-c", "mkdir -p \"$2\"; curl -fsS --max-time 8 \"$1\"", "sh", "https://wardogs.zone/loadouts/base/hub/" + id, root.baseDir];
+        baseFetchProc.running = true;
+    }
+
+    // --- stats prefetch (settings) ------------------------------------------
     // --- stats prefetch (settings) ------------------------------------------
     // Downloads the compare page for every catalog item in id pairs so the
     // details cache is complete and compares open instantly/offline afterwards.
@@ -612,6 +872,7 @@ Panel {
         settingsMode = true;
         newsMode = false;
         compareMode = false;
+        baseMode = false;
         hubMode = false;
         open();
         focusWinKeys();
@@ -621,6 +882,7 @@ Panel {
         settingsMode = false;
         newsMode = false;
         compareMode = false;
+        baseMode = false;
         hubMode = false;
         hubBuildId = "";
         hubBuild = null;
@@ -634,6 +896,7 @@ Panel {
         newsMode = true;
         settingsMode = false;
         compareMode = false;
+        baseMode = false;
         hubMode = false;
         open();
         focusWinKeys();
@@ -908,6 +1171,20 @@ Panel {
         root.hubBuild = null;
         root.hubSlotCursor = 0;
         root.hubError = "";
+    }
+
+    // --- base cursor -----------------------------------------------------
+    function baseMove(d) {
+        var n = root.baseBuilds.length;
+        if (n === 0)
+            return;
+        root.baseCursor = clamp(root.baseCursor + d, 0, n - 1);
+    }
+
+    function baseActivate() {
+        var list = root.baseBuilds;
+        if (root.baseCursor < list.length)
+            openBaseBuild(list[root.baseCursor].id);
     }
 
     function hubRows() {
@@ -1482,6 +1759,36 @@ Panel {
         atomicWrites: true
         printErrors: false
     }
+    // --- base hub processes: same trio as the hub -------------------------
+    Process {
+        id: baseCacheReadProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.onBaseCacheRaw(text)
+        }
+    }
+
+    Process {
+        id: baseFetchProc
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                // route by the fetch target (cache reads may have moved on)
+                if (root.baseNetTarget === "list")
+                    root.onBaseListHtml(text);
+                else
+                    root.onBaseDetailHtml(text);
+            }
+        }
+        stderr: StdioCollector {}
+    }
+
+    FileView {
+        id: baseCacheView
+        watchChanges: false
+        atomicWrites: true
+        printErrors: false
+    }
 
     // Tiny python state helper (local file only; see scripts/persist.py).
     Process {
@@ -1720,6 +2027,21 @@ Panel {
     }
 
     IpcHandler {
+        target: "niziul.wardogs.base"
+        function open() {
+            root.openBase();
+        }
+        function openBase(id: string) {
+            root.open();
+            root.openBase();
+            root.openBaseBuild(id);
+        }
+        function back() {
+            root.closeBaseBuild();
+        }
+    }
+
+    IpcHandler {
         target: "niziul.wardogs.hub"
         function open() {
             root.open();
@@ -1803,27 +2125,31 @@ Panel {
                     root.mapChooserVisible = false;
                     return;
                 }
-                if (root.hubMode && root.hubBuildId !== "") {
+                if (root.baseMode && root.baseBuildId !== "") {
+                    closeBaseBuild();
+                } else if (root.hubMode && root.hubBuildId !== "") {
                     closeHubBuild();
-                } else if (root.settingsMode || root.newsMode || root.compareMode || root.hubMode)
+                } else if (root.settingsMode || root.newsMode || root.compareMode || root.hubMode || root.baseMode)
                     root.showMain();
                 else
                     root.close();
             }
-            Keys.onLeftPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode)
+            Keys.onLeftPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode)
                 root.moveWinCursor(-1, 0)
-            Keys.onRightPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode)
+            Keys.onRightPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode)
                 root.moveWinCursor(1, 0)
             Keys.onUpPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode)
-                root.hubMode ? root.hubMove(-1) : root.moveWinCursor(0, -1)
+                root.baseMode ? baseMove(-1) : root.hubMode ? root.hubMove(-1) : root.moveWinCursor(0, -1)
             Keys.onDownPressed: if (!root.settingsMode && !root.newsMode && !root.compareMode)
-                root.hubMode ? root.hubMove(1) : root.moveWinCursor(0, 1)
+                root.baseMode ? baseMove(1) : root.hubMode ? root.hubMove(1) : root.moveWinCursor(0, 1)
             Keys.onReturnPressed: {
                 if (root.settingsMode) {
                     var cur = root.currentSettingsItem();
                     if (cur && typeof cur.clicked === "function")
                         cur.clicked();
-                } else if (root.hubMode)
+                } else if (root.baseMode)
+                    root.baseActivate();
+                else if (root.hubMode)
                     root.hubActivate();
                 else if (!root.newsMode && !root.compareMode)
                     root.activateWinCursor();
@@ -1833,7 +2159,9 @@ Panel {
                     var cur = root.currentSettingsItem();
                     if (cur && typeof cur.clicked === "function")
                         cur.clicked();
-                } else if (root.hubMode)
+                } else if (root.baseMode)
+                    root.baseActivate();
+                else if (root.hubMode)
                     root.hubActivate();
                 else if (!root.newsMode && !root.compareMode)
                     root.activateWinCursor();
@@ -1853,6 +2181,13 @@ Panel {
                     else if (event.key === Qt.Key_K || event.text === "k")
                         root.moveSettingsFocus(-1);
                     else if (event.text === "/" || event.key === Qt.Key_Escape) {}
+                    return;
+                } else if (root.baseMode) {
+                    // base hub: j/k (h/l) move the cursor, return opens
+                    if (event.key === Qt.Key_J || event.text === "j" || event.text === "l" || event.text === "L")
+                        baseMove(1);
+                    else if (event.key === Qt.Key_K || event.text === "k" || event.text === "h" || event.text === "H")
+                        baseMove(-1);
                     return;
                 } else if (root.newsMode)
                     return;
@@ -1964,8 +2299,8 @@ Panel {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
-                                title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : root.compareMode ? "Compare Items" : root.hubMode ? "Loadout Hub" : "Wardogs Zone"
-                                meta: (root.settingsMode || root.newsMode) ? "" : root.compareMode ? (root.compareA && root.compareB ? String(root.compareA.name) + "  vs  " + String(root.compareB.name) : "") : root.hubMode ? (root.hubBuildId !== "" && root.hubBuild ? String(root.hubBuild.title) : root.hubBuilds.length + " builds published") : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
+                                title: root.settingsMode ? "Wardogs Settings" : root.newsMode ? "Wardogs News" : root.compareMode ? "Compare Items" : root.hubMode ? "Loadout Hub" : root.baseMode ? "Base Hub" : "Wardogs Zone"
+                                meta: root.baseMode ? (root.baseBuildId !== "" && root.baseBase ? String(root.baseBase.title) : root.baseBuilds.length + " bases published") : (root.settingsMode || root.newsMode) ? "" : root.compareMode ? (root.compareA && root.compareB ? String(root.compareA.name) + "  vs  " + String(root.compareB.name) : "") : root.hubMode ? (root.hubBuildId !== "" && root.hubBuild ? String(root.hubBuild.title) : root.hubBuilds.length + " builds published") : (root.health.version ? "Build " + root.health.version + " · " + root.onlineText : "loading…")
                             foreground: root.fg
                             fontFamily: root.fontFamily
                             iconComponent: heroIconComponent
@@ -2005,7 +2340,7 @@ Panel {
                             // The toolbar expands to the right of the hero badge on hover/focus.
                             Button {
                                 radius: root.cornerRadius
-                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode
                                 text: "\uF021"
                                 tooltipText: "Refresh"
                                 foreground: root.fg
@@ -2018,7 +2353,7 @@ Panel {
 
                         Button {
                             id: hubButton
-                            visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
+                            visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode
                             radius: root.cornerRadius
                             tooltipText: "Open loadout hub"
                             foreground: root.fg
@@ -2039,8 +2374,30 @@ Panel {
                         }
 
                         Button {
+                            id: baseButton
+                            visible: !root.baseMode
+                            radius: root.cornerRadius
+                            tooltipText: "Open base hub"
+                            foreground: root.fg
+                            fontFamily: root.fontFamily
+                            fontSize: Style.font.caption
+                            implicitWidth: Style.font.icon + horizontalPadding * 2 + _reservedBorderLeft + _reservedBorderRight
+                            implicitHeight: Style.font.icon + verticalPadding * 2 + _reservedBorderTop + _reservedBorderBottom
+                            horizontalPadding: Style.spacing.controlPaddingX
+                            verticalPadding: Style.spacing.controlPaddingY
+                            onClicked: root.openBase()
+
+                            SvgIcon {
+                                anchors.centerIn: parent
+                                source: "wardogs-base.svg"
+                                color: root.fg
+                                size: Style.font.icon
+                            }
+                        }
+
+                        Button {
                             id: newsButton
-                            visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
+                            visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode
                             radius: root.cornerRadius
                             tooltipText: "News feed"
                             foreground: root.fg
@@ -2061,7 +2418,7 @@ Panel {
                         }
 
                             Button {
-                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode
                                 radius: root.cornerRadius
                                 text: "\uF013"
                                 tooltipText: "Open settings"
@@ -2134,7 +2491,7 @@ Panel {
                     }
 
                     RowLayout {
-                        visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
+                        visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode
                         Layout.fillWidth: true
                         spacing: Style.space(6)
 
@@ -2360,7 +2717,7 @@ Panel {
                             spacing: Style.space(8)
 
                             Text {
-                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode
                                 Layout.fillWidth: true
                                 text: root.items.length === 0 ? (root.indexLoading ? "Loading armory…" : "Offline — can't reach wardogs.zone") : (root.filtered.length === 0 ? "No items match." : (root.searchText !== "" ? "Search · " + root.filtered.length + " item(s) across categories" : (Model.kindLabel(root.activeKind) + " · " + root.filtered.length + " item(s)")))
                                 color: root.dim
@@ -2421,7 +2778,7 @@ Panel {
                             }
 
                             GridLayout {
-                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode
+                                visible: !root.settingsMode && !root.newsMode && !root.compareMode && !root.hubMode && !root.baseMode
                                 Layout.fillWidth: true
                                 Layout.bottomMargin: Style.space(2)
                                 columns: root.winGridColumns
@@ -2565,6 +2922,27 @@ Panel {
                                 }
                                 onHoverSlot: function (index) {
                                     root.hubSlotCursor = index;
+                                }
+                            }
+
+                            // ---------- base hub ----------
+                            BasePanel {
+                                visible: root.baseMode
+                                Layout.fillWidth: true
+                                listMode: root.baseBuildId === ""
+                                builds: root.baseBuilds
+                                base: root.baseBase
+                                cursor: root.baseCursor
+                                loading: root.baseLoading
+                                error: root.baseError
+                                fg: root.fg
+                                dim: root.dim
+                                fontFamily: root.fontFamily
+                                onOpenBuild: function (id) {
+                                    openBaseBuild(id);
+                                }
+                                onHoverCard: function (index) {
+                                    root.baseCursor = index;
                                 }
                             }
 
