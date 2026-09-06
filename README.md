@@ -31,7 +31,7 @@ A [wardogs.zone](https://wardogs.zone) armory/item browser and news feed for the
 ## Install
 
 ```sh
-omarchy plugin add https://github.com/niziul/niziul.wardogs.plugin.git --enable
+omarchy plugin add https://github.com/niziul/omarchy-wardogs.git --enable
 ```
 
 Then add the "Wardogs Zone" widget to your bar.
