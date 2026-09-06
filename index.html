@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WARDOGS Zone — Omarchy shell plugin</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #121419;
+    --line: #23262d;
+    --text: #e6e6e6;
+    --dim: #9aa0a8;
+    --accent: #eab308;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.55;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 2.6rem 1.4rem 2rem;
+    text-align: center;
+    background: linear-gradient(180deg, #14171d, var(--bg));
+  }
+  header .kicker {
+    text-transform: uppercase;
+    letter-spacing: .25em;
+    font-size: .8rem;
+    color: var(--dim);
+  }
+  header h1 { margin: .4rem 0 0; font-size: 2rem; }
+  header p.sub { color: var(--dim); max-width: 42rem; margin: .7rem auto 0; }
+  main { max-width: 960px; margin: 0 auto; padding: 2rem 1.4rem 3rem; }
+  h2 { margin: 2.2rem 0 .8rem; font-size: 1.3rem; }
+  ul.features { padding-left: 1.2rem; }
+  ul.features li { margin: .4rem 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; }
+  figure { margin: 0; }
+  figure img {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+  figcaption { margin-top: .45rem; font-size: .85rem; color: var(--dim); }
+  .cta { margin-top: 2.4rem; text-align: center; }
+  .cta a.button {
+    display: inline-block;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: .6rem 1.4rem;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 1.4rem;
+    text-align: center;
+    font-size: .85rem;
+    color: var(--dim);
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="kicker">Omarchy shell plugin</div>
+    <h1>WARDOGS Zone</h1>
+    <p class="sub">Armory browser, item compare, the published loadout hub, the FOB base hub and Wardogs Zone news — right in your shell, fed by the public wardogs.zone site.</p>
+  </header>
+
+  <main>
+    <h2>Features</h2>
+    <ul class="features">
+      <li><strong>Armory browser</strong> — 565+ items across weapons, ammo, attachments, armor, vehicles, medical and tool categories, with per-caliber filtering and a fuzzy name search.</li>
+      <li><strong>Compare</strong> — pick two items and diff their stats side by side.</li>
+      <li><strong>Loadout hub</strong> — the published build list; open any build into a full equipment sheet with gear and backpack grid.</li>
+      <li><strong>Base hub</strong> — published FOB plans sorted by hot / top / new with search; open a plan into a sheet with the plan canvas and the supply manifest.</li>
+      <li><strong>Notifications</strong> — the bar pill tracks the live WARDOGS build version and new Wardogs Zone articles.</li>
+      <li><strong>Open in the site</strong> — every hub item exposes a one-click button to open the page on wardogs.zone.</li>
+    </ul>
+
+    <h2>Screenshots</h2>
+    <div class="grid">
+      <figure>
+        <img src="docs/screenshots/01-armory.png" alt="Armory browser">
+        <figcaption>Armory browser</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/screenshots/02-compare.png" alt="Item compare">
+        <figcaption>Item compare</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/screenshots/03-hub-list.png" alt="Loadout hub">
+        <figcaption>Loadout hub</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/screenshots/04-hub-build-sheet.png" alt="Build sheet">
+        <figcaption>Build sheet</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/screenshots/05-base-list.png" alt="Base hub">
+        <figcaption>Base hub</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/screenshots/06-base-sheet.png" alt="Base sheet">
+        <figcaption>Base sheet</figcaption>
+      </figure>
+    </div>
+
+    <div class="cta">
+      <a class="button" href="https://github.com/niziul/niziul.wardogs.plugin">View the repository</a>
+    </div>
+  </main>
+
+  <footer>
+    MIT licensed — authored by <a href="https://github.com/niziul">niziul</a>.
+    Data and names belong to Wardogs Zone.
+  </footer>
+</body>
+</html>
