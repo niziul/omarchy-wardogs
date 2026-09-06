@@ -425,6 +425,19 @@ Item {
                             font.family: hp.fontFamily
                             font.pixelSize: Style.font.caption
                         }
+
+                        Button {
+                            Layout.alignment: Qt.AlignVCenter
+                            radius: 0
+                            text: "\u2197"
+                            tooltipText: "Open in the site"
+                            foreground: hp.dim
+                            fontFamily: hp.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(5)
+                            verticalPadding: Style.space(3)
+                            onClicked: hp.openItem("https://wardogs.zone/loadouts/hub/" + card.modelData.id)
+                        }
                     }
                 }
             }
@@ -441,14 +454,33 @@ Item {
                 Layout.fillWidth: true
                 spacing: Style.space(2)
 
-                Text {
+                RowLayout {
                     Layout.fillWidth: true
-                    visible: hp.build && hp.build.description !== ""
-                    text: hp.build ? String(hp.build.description) : ""
-                    color: hp.dim
-                    font.family: hp.fontFamily
-                    font.pixelSize: Style.font.caption
-                    wrapMode: Text.WordWrap
+                    spacing: Style.space(8)
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: hp.build && hp.build.description !== ""
+                        text: hp.build ? String(hp.build.description) : ""
+                        color: hp.dim
+                        font.family: hp.fontFamily
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Button {
+                        Layout.alignment: Qt.AlignVCenter
+                        visible: hp.build !== null
+                        radius: 0
+                        text: "OPEN IN SITE"
+                        tooltipText: "Open in the site"
+                        foreground: hp.fg
+                        fontFamily: hp.fontFamily
+                        fontSize: Style.font.caption
+                        horizontalPadding: Style.space(8)
+                        verticalPadding: Style.space(4)
+                        onClicked: hp.openItem("https://wardogs.zone/loadouts/hub/" + hp.build.id)
+                    }
                 }
             }
 

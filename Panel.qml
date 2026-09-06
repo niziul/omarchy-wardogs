@@ -3150,6 +3150,7 @@ Panel {
                                 loading: root.baseLoading
                                 error: root.baseError
                                 query: root.baseQuery
+                                currentId: root.baseBuildId
                                 fg: root.fg
                                 dim: root.dim
                                 fontFamily: root.fontFamily
@@ -3158,6 +3159,9 @@ Panel {
                                 }
                                 onHoverCard: function (index) {
                                     root.baseCursor = index;
+                                }
+                                onOpenItem: function (url) {
+                                    root.openItem(url);
                                 }
                             }
 

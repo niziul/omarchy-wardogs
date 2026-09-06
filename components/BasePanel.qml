@@ -19,12 +19,14 @@ Item {
     property bool loading: false
     property string error: ""
     property string query: ""               // pinned search (empty-state copy)
+    property string currentId: ""           // detail id (open-in-site link)
     property color fg: Qt.rgba(1, 1, 1, 0.9)
     property color dim: Qt.rgba(1, 1, 1, 0.62)
     property string fontFamily: ""
 
     signal openBuild(string id)
     signal hoverCard(int index)
+    signal openItem(string url)
 
     readonly property color accentColor: Color.accent
     // the site's role palette (its wd-* tokens)
@@ -255,6 +257,19 @@ Item {
                                 font.letterSpacing: 1
                             }
                         }
+
+                        Button {
+                            Layout.alignment: Qt.AlignVCenter
+                            radius: 0
+                            text: "\u2197"
+                            tooltipText: "Open in the site"
+                            foreground: bp.dim
+                            fontFamily: bp.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(5)
+                            verticalPadding: Style.space(3)
+                            onClicked: bp.openItem("https://wardogs.zone/loadouts/base/hub/" + card.modelData.id)
+                        }
                     }
                 }
             }
@@ -296,14 +311,33 @@ Item {
                         font.letterSpacing: 1
                     }
 
-                    Text {
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: bp.base ? String(bp.base.title) : ""
-                        color: bp.fg
-                        font.family: bp.fontFamily
-                        font.pixelSize: Style.font.title
-                        font.bold: true
-                        elide: Text.ElideRight
+                        spacing: Style.space(8)
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: bp.base ? String(bp.base.title) : ""
+                            color: bp.fg
+                            font.family: bp.fontFamily
+                            font.pixelSize: Style.font.title
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Button {
+                            Layout.alignment: Qt.AlignVCenter
+                            visible: bp.base !== null
+                            radius: 0
+                            text: "OPEN IN SITE"
+                            tooltipText: "Open in the site"
+                            foreground: bp.fg
+                            fontFamily: bp.fontFamily
+                            fontSize: Style.font.caption
+                            horizontalPadding: Style.space(8)
+                            verticalPadding: Style.space(4)
+                            onClicked: bp.openItem("https://wardogs.zone/loadouts/base/hub/" + bp.currentId)
+                        }
                     }
 
                     Text {
