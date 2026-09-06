@@ -2074,6 +2074,7 @@ Panel {
     IpcHandler {
         target: "niziul.wardogs.armory"
         function open() {
+            root.open();
             root.showMain();
         }
     }
